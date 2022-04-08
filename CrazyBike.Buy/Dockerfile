@@ -4,11 +4,12 @@ EXPOSE 80
 EXPOSE 443
 
 FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
-WORKDIR /src
+WORKDIR /CrazyBike
 COPY ["CrazyBike.Buy/CrazyBike.Buy.csproj", "CrazyBike.Buy/"]
+COPY ["CrazyBike.Shared/CrazyBike.Shared.csproj", "CrazyBike.Shared/"]
 RUN dotnet restore "CrazyBike.Buy/CrazyBike.Buy.csproj"
 COPY . .
-WORKDIR "/src/CrazyBike.Buy"
+WORKDIR "/CrazyBike/CrazyBike.Buy"
 RUN dotnet build "CrazyBike.Buy.csproj" -c Release -o /app/build
 
 FROM build AS publish

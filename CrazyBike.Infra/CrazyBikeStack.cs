@@ -66,6 +66,8 @@ namespace CrazyBike.Infra
             
             #endregion
             
+            /*
+            
             #region Log Analytics
             
             var logWorkspaceName = $"{projectName}-{stackName}-log";
@@ -88,7 +90,7 @@ namespace CrazyBike.Infra
             
             #region Container Registry
             
-            var containerRegistryName = $"{projectName}-{stackName}-cr";
+            var containerRegistryName = $"{projectName}{stackName}cr";
             var containerRegistry = new Registry(containerRegistryName, new RegistryArgs
             {
                 RegistryName = containerRegistryName,
@@ -110,7 +112,7 @@ namespace CrazyBike.Infra
             var buyAppImage = new Image(buyAppImageName, new ImageArgs
             {
                 ImageName = Output.Format($"{containerRegistry.LoginServer}/{buyAppImageName}:v1"),
-                Build = new DockerBuild { Context = $"./{buyAppImageName}" },
+                Build = new DockerBuild { Context = "./CrazyBike.Buy" },
                 Registry = new ImageRegistry
                 {
                     Server = containerRegistry.LoginServer,
@@ -123,11 +125,11 @@ namespace CrazyBike.Infra
 
             #region Container Apps
             
-            var kubeEnvName = $"{projectName}-{stackName}-env";
+            var kubeEnvName = $"{projectName}-{stackName}-kenv";
             var kubeEnv = new KubeEnvironment(kubeEnvName, new KubeEnvironmentArgs
             {
                 Name = kubeEnvName,
-                ResourceGroupName = resourceGroup.Name,
+                ResourceGroupName = resourceGroup.Name, 
                 //Type = "Managed",
                 AppLogsConfiguration = new AppLogsConfigurationArgs
                 {
@@ -187,6 +189,8 @@ namespace CrazyBike.Infra
             BuyUrl = Output.Format($"https://{buyApp.Configuration.Apply(c => c.Ingress).Apply(i => i.Fqdn)}");
             
             #endregion
+            
+            */
         }
 
         static async Task<string> GetASBPrimaryConectionString(string resourceGroupName, string namespaceName)

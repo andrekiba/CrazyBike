@@ -22,6 +22,14 @@ namespace CrazyBike.Buy
             services.AddControllers();
             services.AddSwagger(Configuration);
             services.ConfigureLogger(Configuration);
+            
+            /*
+            services.AddTransient(s =>
+            {
+                var namespaceConnectionString = configuration.GetValue<string>("ASBConnectionString");
+                return new ServiceBusConnectionStringBuilder(namespaceConnectionString);
+            });
+            */
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
