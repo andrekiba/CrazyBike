@@ -1,13 +1,8 @@
-using System.IO;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Azure;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Sinks.SystemConsole.Themes;
 
-namespace CrazyBike.Buy
+namespace CrazyBike.Assembler
 {
     public static class Program
     {
@@ -16,7 +11,7 @@ namespace CrazyBike.Buy
             var host = CreateHostBuilder(args).Build();
             await host.RunAsync();
         }
-
+        
         static IHostBuilder CreateHostBuilder(string[] args)
         {
             var configuration = new ConfigurationBuilder()
@@ -37,12 +32,14 @@ namespace CrazyBike.Buy
 
                     loggingBuilder.AddSerilog(logger);
                 })
-                .ConfigureWebHostDefaults(webBuilder =>
+                .ConfigureServices((hostContext, services) =>
                 {
-                    webBuilder.UseStartup<Startup>();
-                    webBuilder.UseConfiguration(configuration);
-                })
-                .UseSerilog();
-        }
+                    services.AddAzureClients(builder =>
+                    {
+                        builder.AddServiceBusClient(configuration["ASB:ConnectionString"]);
+                    });
+                    services.AddHostedService<AssemblerWorker>();
+                });
+        }    
     }
 }

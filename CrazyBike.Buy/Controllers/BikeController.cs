@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
+using Azure.Messaging.ServiceBus.Administration;
 using Bogus;
 using CrazyBike.Shared;
 using Microsoft.AspNetCore.Mvc;
@@ -17,7 +18,7 @@ namespace CrazyBike.Buy.Controllers
     [Route("bike")]
     public class BikeController : ControllerBase
     {
-        const string AssemblerQueueName = "fantastic-bike-assembler";
+        const string AssemblerQueueName = "crazybike-assembler";
         static readonly string[] bikePartNames =
         {
             "wheel", "rim", "tire", "brake", "seat", "cassette", "rear-derailleur", "front-derailleur",  
@@ -32,36 +33,41 @@ namespace CrazyBike.Buy.Controllers
         
         readonly ILogger<BikeController> logger;
         readonly IConfiguration configuration;
+        readonly ServiceBusAdministrationClient sbaClient;
+        readonly ServiceBusClient sbClient;
 
-        public BikeController(ILogger<BikeController> logger, IConfiguration configuration)
+        public BikeController(ILogger<BikeController> logger, IConfiguration configuration, 
+            ServiceBusAdministrationClient sbaClient, ServiceBusClient sbClient)
         {
             this.logger = logger;
             this.configuration = configuration;
+            this.sbaClient = sbaClient;
+            this.sbClient = sbClient;
         }
 
         [HttpPost("buy")]
         public async Task<IActionResult> Buy()
         {
             var bike = ProduceBike();
-            var bikeMessage = new AssembleBikeMessage(bike.Id, bike.Price, bike.Model, bike.Parts);
-            var rowBikeMessage = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(bikeMessage));
+            var assembleBikeMessage = new AssembleBikeMessage(bike.Id, bike.Price, bike.Model, bike.Parts);
+            var rawAssembleBikeMessage = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(assembleBikeMessage));
                 
-            var message = new ServiceBusMessage(rowBikeMessage)
+            var message = new ServiceBusMessage(rawAssembleBikeMessage)
             {
-                MessageId = Guid.NewGuid().ToString()
+                MessageId = Guid.NewGuid().ToString(),
+                CorrelationId = Guid.NewGuid().ToString(),
+                ApplicationProperties = { {"MessageType", typeof(AssembleBikeMessage).FullName} }
             };
             
-            logger.LogWarning($"Sending buying request for bike {bike.Id}");
+            logger.LogInformation($"Sending buying request for bike {bike.Id}");
             
-            var client = new ServiceBusClient(configuration["ASBConnectionString"]);
-            var sender = client.CreateSender(AssemblerQueueName);
+            var sender = sbClient.CreateSender(AssemblerQueueName);
             await sender.SendMessageAsync(message).ConfigureAwait(false);
             
-            logger.LogWarning($"Bike {bike.Id} bought successfully!");
+            logger.LogInformation($"Bike {bike.Id} bought successfully!");
             
             await sender.DisposeAsync();
-            await client.DisposeAsync();
-            
+
             return new AcceptedResult();
         }
         

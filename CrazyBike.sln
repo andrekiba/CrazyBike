@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrazyBike.Buy", "CrazyBike.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrazyBike.Infra", "CrazyBike.Infra\CrazyBike.Infra.csproj", "{55A107A8-9871-4782-BCC5-8D4A8BD434A4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrazyBike.Assembler", "CrazyBike.Assembler\CrazyBike.Assembler.csproj", "{F2CD70C3-4504-44E6-9265-EC714EF9737E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +26,9 @@ Global
 		{55A107A8-9871-4782-BCC5-8D4A8BD434A4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{55A107A8-9871-4782-BCC5-8D4A8BD434A4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{55A107A8-9871-4782-BCC5-8D4A8BD434A4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F2CD70C3-4504-44E6-9265-EC714EF9737E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F2CD70C3-4504-44E6-9265-EC714EF9737E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F2CD70C3-4504-44E6-9265-EC714EF9737E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F2CD70C3-4504-44E6-9265-EC714EF9737E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
