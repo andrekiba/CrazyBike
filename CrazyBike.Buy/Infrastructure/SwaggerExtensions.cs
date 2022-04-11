@@ -3,21 +3,22 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi.Models;
 
-namespace CrazyBike.Buy.Infrastructure;
-
-public static class SwaggerExtensions
+namespace CrazyBike.Buy.Infrastructure
 {
-    public static void AddSwagger(this IServiceCollection services, IConfiguration configuration)
+    public static class SwaggerExtensions
     {
-        services.AddSwaggerGen(c =>
+        public static void AddSwagger(this IServiceCollection services, IConfiguration configuration)
         {
-            c.SwaggerDoc("v1", new OpenApiInfo { Title = "CrazyBike.Buy", Version = "v1" });
-        });
-    }
+            services.AddSwaggerGen(c =>
+            {
+                c.SwaggerDoc("v1", new OpenApiInfo { Title = "CrazyBike.Buy", Version = "v1" });
+            });
+        }
 
-    public static void UseSwagger(this IApplicationBuilder app, IConfiguration configuration)
-    {
-        app.UseSwagger();
-        app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "CrazyBike.Buy v1"));
+        public static void UseSwagger(this IApplicationBuilder app, IConfiguration configuration)
+        {
+            app.UseSwagger();
+            app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "CrazyBike.Buy v1"));
+        }
     }
 }

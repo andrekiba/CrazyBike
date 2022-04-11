@@ -3,6 +3,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using Serilog;
+using Serilog.Sinks.SystemConsole.Themes;
 
 namespace CrazyBike.Buy
 {
@@ -25,7 +27,21 @@ namespace CrazyBike.Buy
             
             return Host.CreateDefaultBuilder(args)
                 .ConfigureAppConfiguration((hostingContext, config) => config.AddConfiguration(configuration))
-                .ConfigureWebHostDefaults(webBuilder => { webBuilder.UseStartup<Startup>(); });
+                .ConfigureLogging((hostBuilderContext, loggingBuilder) =>
+                {
+                    var logger = new LoggerConfiguration()
+                        .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level}] {SourceContext}{NewLine}{Message:lj}{NewLine}{Exception}{NewLine}", theme: AnsiConsoleTheme.Code)
+                        .MinimumLevel.Error()
+                        .CreateLogger();
+
+                    loggingBuilder.AddSerilog(logger);
+                })
+                .ConfigureWebHostDefaults(webBuilder =>
+                {
+                    webBuilder.UseStartup<Startup>();
+                    webBuilder.UseConfiguration(configuration);
+                })
+                .UseSerilog();
         }
     }
 }

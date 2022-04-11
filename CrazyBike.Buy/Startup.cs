@@ -14,22 +14,13 @@ namespace CrazyBike.Buy
             Configuration = configuration;
         }
 
-        public IConfiguration Configuration { get; }
+        IConfiguration Configuration { get; }
 
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddControllers();
             services.AddSwagger(Configuration);
-            services.ConfigureLogger(Configuration);
-            
-            /*
-            services.AddTransient(s =>
-            {
-                var namespaceConnectionString = configuration.GetValue<string>("ASBConnectionString");
-                return new ServiceBusConnectionStringBuilder(namespaceConnectionString);
-            });
-            */
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
