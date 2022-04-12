@@ -1,0 +1,31 @@
+version: '3.4'
+
+services:
+  crazy-bike.buy:
+    image: andrekiba/crazy-bike-buy:v1
+    build:
+      context: .
+      dockerfile: CrazyBike.Buy/Dockerfile
+    ports:
+      - "7071:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASBConnectionString=<asb-connection-string>
+  crazy.bike.assembler:
+    image:  andrekiba/crazy-bike-assembler:v1
+    build:
+      context: .
+      dockerfile: CrazyBike.Assembler/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - FakeWorkDuration=00:02:00
+      - ASBConnectionString=<asb-connection-string>
+  crazy.bike.shipper:
+    image: andrekiba/crazy-bike-shipper:v1
+    build:
+      context: .
+      dockerfile: CrazyBike.Shipper/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASBConnectionString=<asb-connection-string>
+  

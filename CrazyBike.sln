@@ -10,6 +10,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrazyBike.Assembler", "Craz
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrazyBike.Shipper", "CrazyBike.Shipper\CrazyBike.Shipper.csproj", "{FC141CBF-50AF-4BD0-B834-8C65811E22C1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrazyBike.Docker", "CrazyBike.Docker.dcproj", "{87977AEC-F772-4268-B5AD-2C51B048947A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
