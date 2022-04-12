@@ -2,11 +2,12 @@
 WORKDIR /app
 
 FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
-WORKDIR /src
+WORKDIR /CrazyBike
 COPY ["CrazyBike.Assembler/CrazyBike.Assembler.csproj", "CrazyBike.Assembler/"]
+COPY ["CrazyBike.Shared/CrazyBike.Shared.csproj", "CrazyBike.Shared/"]
 RUN dotnet restore "CrazyBike.Assembler/CrazyBike.Assembler.csproj"
 COPY . .
-WORKDIR "/src/CrazyBike.Assembler"
+WORKDIR "/CrazyBike/CrazyBike.Assembler"
 RUN dotnet build "CrazyBike.Assembler.csproj" -c Release -o /app/build
 
 FROM build AS publish

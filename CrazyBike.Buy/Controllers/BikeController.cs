@@ -9,6 +9,7 @@ using Azure.Messaging.ServiceBus.Administration;
 using Bogus;
 using CrazyBike.Shared;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -37,12 +38,12 @@ namespace CrazyBike.Buy.Controllers
         readonly ServiceBusClient sbClient;
 
         public BikeController(ILogger<BikeController> logger, IConfiguration configuration, 
-            ServiceBusAdministrationClient sbaClient, ServiceBusClient sbClient)
+            IAzureClientFactory<ServiceBusAdministrationClient> sbaFactory, IAzureClientFactory<ServiceBusClient> sbFactory)
         {
             this.logger = logger;
             this.configuration = configuration;
-            this.sbaClient = sbaClient;
-            this.sbClient = sbClient;
+            sbaClient = sbaFactory.CreateClient("buyAdmin");
+            sbClient = sbFactory.CreateClient("buy");;
         }
 
         [HttpPost("buy")]
@@ -61,12 +62,10 @@ namespace CrazyBike.Buy.Controllers
             
             logger.LogInformation($"Sending buying request for bike {bike.Id}");
             
-            var sender = sbClient.CreateSender(AssemblerQueueName);
+            await using var sender = sbClient.CreateSender(AssemblerQueueName);
             await sender.SendMessageAsync(message).ConfigureAwait(false);
             
             logger.LogInformation($"Bike {bike.Id} bought successfully!");
-            
-            await sender.DisposeAsync();
 
             return new AcceptedResult();
         }

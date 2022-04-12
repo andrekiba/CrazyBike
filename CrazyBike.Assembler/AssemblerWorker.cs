@@ -4,6 +4,7 @@ using Azure.Messaging.ServiceBus;
 using Azure.Messaging.ServiceBus.Administration;
 using Bogus;
 using CrazyBike.Shared;
+using Microsoft.Extensions.Azure;
 
 namespace CrazyBike.Assembler
 {
@@ -22,14 +23,15 @@ namespace CrazyBike.Assembler
         const string ShipperQueueName = "crazybike-shipper";
         
         public AssemblerWorker(IConfiguration configuration, 
-            IHostApplicationLifetime appLifetime, ServiceBusClient client,
+            IHostApplicationLifetime appLifetime,
+            IAzureClientFactory<ServiceBusAdministrationClient> sbaFactory, IAzureClientFactory<ServiceBusClient> sbFactory,
             ILogger<AssemblerWorker> logger)
         {
             this.configuration = configuration;
             this.logger = logger;
             this.appLifetime = appLifetime;
-            adminClient = new ServiceBusAdministrationClient(configuration.GetValue<string>("ASBConnectionString"));
-            this.client = client;
+            adminClient = sbaFactory.CreateClient("assemblerAdmin");
+            client = sbFactory.CreateClient("assembler");
             processor = client.CreateProcessor(AssemblerQueueName, new ServiceBusProcessorOptions
             {
                 MaxConcurrentCalls = 1,
@@ -38,7 +40,7 @@ namespace CrazyBike.Assembler
             });
             processor.ProcessMessageAsync += HandleMessage;
             processor.ProcessErrorAsync += HandleError;
-            sender = this.client.CreateSender(ShipperQueueName);
+            sender = client.CreateSender(ShipperQueueName);
         }
 
         public override async Task StartAsync(CancellationToken cancellationToken)
@@ -48,7 +50,7 @@ namespace CrazyBike.Assembler
 
             await base.StartAsync(cancellationToken);
         }
-
+        
         protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.Run(async () =>
         {
             try

@@ -24,8 +24,14 @@ namespace CrazyBike.Buy
             services.AddSwagger(Configuration);
             services.AddAzureClients(builder =>
             {
-                builder.AddServiceBusAdministrationClient(Configuration["ASBConnectionString"]);
-                builder.AddServiceBusClient(Configuration["ASBConnectionString"]);
+                builder.AddServiceBusAdministrationClient(Configuration["ASBConnectionString"])
+                    .WithName("buyAdmin");
+                builder.AddServiceBusClient(Configuration["ASBConnectionString"])
+                    .WithName("buy")
+                    .ConfigureOptions(options =>
+                    {
+                        options.EnableCrossEntityTransactions = true;
+                    });
             });
         }
 

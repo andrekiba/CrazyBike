@@ -36,7 +36,14 @@ namespace CrazyBike.Assembler
                 {
                     services.AddAzureClients(builder =>
                     {
-                        builder.AddServiceBusClient(configuration["ASB:ConnectionString"]);
+                        builder.AddServiceBusAdministrationClient(configuration["ASBConnectionString"])
+                            .WithName("assemblerAdmin");
+                        builder.AddServiceBusClient(configuration["ASBConnectionString"])
+                            .WithName("assembler")
+                            .ConfigureOptions(options =>
+                            {
+                                options.EnableCrossEntityTransactions = true;
+                            });
                     });
                     services.AddHostedService<AssemblerWorker>();
                 });
