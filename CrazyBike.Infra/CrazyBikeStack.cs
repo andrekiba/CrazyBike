@@ -6,13 +6,10 @@ using Pulumi.AzureNative.ContainerRegistry.Inputs;
 using Pulumi.AzureNative.OperationalInsights;
 using Pulumi.AzureNative.OperationalInsights.Inputs;
 using Pulumi.AzureNative.Resources;
-using Pulumi.AzureNative.Web;
-using Pulumi.AzureNative.Web.Inputs;
 using Pulumi.Docker;
 using Deployment = Pulumi.Deployment;
 using ASB = Pulumi.AzureNative.ServiceBus;
-using ContainerArgs = Pulumi.AzureNative.Web.Inputs.ContainerArgs;
-using SecretArgs = Pulumi.AzureNative.Web.Inputs.SecretArgs;
+using App = Pulumi.AzureNative.App;
 
 namespace CrazyBike.Infra
 {
@@ -47,11 +44,10 @@ namespace CrazyBike.Infra
             #endregion
             
             #region ASB
-
+            /*
             var asbNamespaceName = $"{projectName}{stackName}ns";
             var asbNamespace = new ASB.Namespace(asbNamespaceName, new ASB.NamespaceArgs
             {
-                //Location = location,
                 NamespaceName = asbNamespaceName,
                 ResourceGroupName = resourceGroup.Name,
                 Sku = new ASB.Inputs.SBSkuArgs
@@ -63,10 +59,8 @@ namespace CrazyBike.Infra
             
             ASBPrimaryConnectionString = Output.Tuple(resourceGroup.Name, asbNamespace.Name).Apply(names =>
                 Output.Create(GetASBPrimaryConectionString(names.Item1, names.Item2)));
-            
+            */
             #endregion
-            
-            /*
             
             #region Log Analytics
             
@@ -107,12 +101,54 @@ namespace CrazyBike.Infra
                 }));
             var adminUsername = credentials.Apply(c => c.Username);
             var adminPassword = credentials.Apply(c => c.Passwords[0].Value);
-
-            var buyAppImageName = $"{projectName}-buy";
-            var buyAppImage = new Image(buyAppImageName, new ImageArgs
+            
+            #endregion
+            
+            #region Docker images
+            
+            var buyImageName = $"{projectName}-buy";
+            var buyImage = new Image(buyImageName, new ImageArgs
             {
-                ImageName = Output.Format($"{containerRegistry.LoginServer}/{buyAppImageName}:v1"),
-                Build = new DockerBuild { Context = "./CrazyBike.Buy" },
+                ImageName = Output.Format($"{containerRegistry.LoginServer}/{buyImageName}:latest"),
+                Build = new DockerBuild
+                {
+                    Dockerfile = "./../CrazyBike.Buy/Dockerfile",
+                    Context = "./.."
+                },
+                Registry = new ImageRegistry
+                {
+                    Server = containerRegistry.LoginServer,
+                    Username = adminUsername,
+                    Password = adminPassword
+                }
+            });
+            
+            var assemblerImageName = $"{projectName}-assembler";
+            var assemblerImage = new Image(assemblerImageName, new ImageArgs
+            {
+                ImageName = Output.Format($"{containerRegistry.LoginServer}/{assemblerImageName}:latest"),
+                Build = new DockerBuild
+                {
+                    Dockerfile = "./../CrazyBike.Assembler/Dockerfile",
+                    Context = "./.."
+                },
+                Registry = new ImageRegistry
+                {
+                    Server = containerRegistry.LoginServer,
+                    Username = adminUsername,
+                    Password = adminPassword
+                }
+            });
+            
+            var shipperImageName = $"{projectName}-shipper";
+            var shipperImage = new Image(shipperImageName, new ImageArgs
+            {
+                ImageName = Output.Format($"{containerRegistry.LoginServer}/{shipperImageName}:latest"),
+                Build = new DockerBuild
+                {
+                    Dockerfile = "./../CrazyBike.Shipper/Dockerfile",
+                    Context = "./.."
+                },
                 Registry = new ImageRegistry
                 {
                     Server = containerRegistry.LoginServer,
@@ -124,17 +160,16 @@ namespace CrazyBike.Infra
             #endregion 
 
             #region Container Apps
-            
-            var kubeEnvName = $"{projectName}-{stackName}-kenv";
-            var kubeEnv = new KubeEnvironment(kubeEnvName, new KubeEnvironmentArgs
+
+            var kubeEnvName = $"{projectName}-{stackName}-env";
+            var kubeEnv = new App.ManagedEnvironment(kubeEnvName, new App.ManagedEnvironmentArgs
             {
                 Name = kubeEnvName,
-                ResourceGroupName = resourceGroup.Name, 
-                //Type = "Managed",
-                AppLogsConfiguration = new AppLogsConfigurationArgs
+                ResourceGroupName = resourceGroup.Name,
+                AppLogsConfiguration = new App.Inputs.AppLogsConfigurationArgs
                 {
                     Destination = "log-analytics",
-                    LogAnalyticsConfiguration = new LogAnalyticsConfigurationArgs
+                    LogAnalyticsConfiguration = new App.Inputs.LogAnalyticsConfigurationArgs
                     {
                         CustomerId = logWorkspace.CustomerId,
                         SharedKey = logWorkspaceSharedKeys.Apply(r => r.PrimarySharedKey)
@@ -142,55 +177,130 @@ namespace CrazyBike.Infra
                 }
             });
             
-            var buyAppName = $"{projectName}-{stackName}-ca-buy";
-            var buyApp = new ContainerApp(buyAppName, new ContainerAppArgs
+            var buyName = $"{projectName}-{stackName}-ca-buy";
+            var buy = new App.ContainerApp(buyName, new App.ContainerAppArgs
             {
-                Name = buyAppName,
+                Name = buyName,
                 ResourceGroupName = resourceGroup.Name,
-                KubeEnvironmentId = kubeEnv.Id,
-                Configuration = new ConfigurationArgs
+                ManagedEnvironmentId = kubeEnv.Id,
+                Configuration = new App.Inputs.ConfigurationArgs
                 {
-                    Ingress = new IngressArgs
+                    Ingress = new App.Inputs.IngressArgs
                     {
                         External = true,
                         TargetPort = 80
                     },
                     Registries =
                     {
-                        new RegistryCredentialsArgs
+                        new App.Inputs.RegistryCredentialsArgs
                         {
                             Server = containerRegistry.LoginServer,
                             Username = adminUsername,
-                            PasswordSecretRef = "pwd"
+                            PasswordSecretRef = $"{containerRegistryName}-admin-pwd"
                         }
                     },
                     Secrets = 
                     {
-                        new SecretArgs
+                        new App.Inputs.SecretArgs
                         {
-                            Name = "pwd",
+                            Name = $"{containerRegistryName}-admin-pwd",
                             Value = adminPassword
                         }
                     }
                 },
-                Template = new TemplateArgs
+                Template = new App.Inputs.TemplateArgs
                 {
                     Containers = 
                     {
-                        new ContainerArgs
+                        new App.Inputs.ContainerArgs
                         {
-                            Name = buyAppImageName,
-                            Image = buyAppImage.ImageName
+                            Name = buyImageName,
+                            Image = buyImage.ImageName
+                        }
+                    }
+                }
+            });
+            BuyUrl = Output.Format($"https://{buy.Configuration.Apply(c => c.Ingress).Apply(i => i.Fqdn)}");
+            
+            var assemblerName = $"{projectName}-{stackName}-ca-assembler";
+            var assembler = new App.ContainerApp(assemblerName, new App.ContainerAppArgs
+            {
+                Name = assemblerName,
+                ResourceGroupName = resourceGroup.Name,
+                ManagedEnvironmentId = kubeEnv.Id,
+                Configuration = new App.Inputs.ConfigurationArgs
+                {
+                    Registries =
+                    {
+                        new App.Inputs.RegistryCredentialsArgs
+                        {
+                            Server = containerRegistry.LoginServer,
+                            Username = adminUsername,
+                            PasswordSecretRef = $"{containerRegistryName}-admin-pwd"
+                        }
+                    },
+                    Secrets = 
+                    {
+                        new App.Inputs.SecretArgs
+                        {
+                            Name = $"{containerRegistryName}-admin-pwd",
+                            Value = adminPassword
+                        }
+                    }
+                },
+                Template = new App.Inputs.TemplateArgs
+                {
+                    Containers = 
+                    {
+                        new App.Inputs.ContainerArgs
+                        {
+                            Name = assemblerImageName,
+                            Image = assemblerImage.ImageName
                         }
                     }
                 }
             });
             
-            BuyUrl = Output.Format($"https://{buyApp.Configuration.Apply(c => c.Ingress).Apply(i => i.Fqdn)}");
+            var shipperName = $"{projectName}-{stackName}-ca-shipper";
+            var shipper = new App.ContainerApp(shipperName, new App.ContainerAppArgs
+            {
+                Name = shipperName,
+                ResourceGroupName = resourceGroup.Name,
+                ManagedEnvironmentId = kubeEnv.Id,
+                Configuration = new App.Inputs.ConfigurationArgs
+                {
+                    Registries =
+                    {
+                        new App.Inputs.RegistryCredentialsArgs
+                        {
+                            Server = containerRegistry.LoginServer,
+                            Username = adminUsername,
+                            PasswordSecretRef = $"{containerRegistryName}-admin-pwd"
+                        }
+                    },
+                    Secrets = 
+                    {
+                        new App.Inputs.SecretArgs
+                        {
+                            Name = $"{containerRegistryName}-admin-pwd",
+                            Value = adminPassword
+                        }
+                    }
+                },
+                Template = new App.Inputs.TemplateArgs
+                {
+                    Containers = 
+                    {
+                        new App.Inputs.ContainerArgs
+                        {
+                            Name = shipperImageName,
+                            Image = shipperImage.ImageName
+                        }
+                    }
+                }
+            });
             
             #endregion
-            
-            */
         }
 
         static async Task<string> GetASBPrimaryConectionString(string resourceGroupName, string namespaceName)
