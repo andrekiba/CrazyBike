@@ -44,7 +44,7 @@ namespace CrazyBike.Infra
             #endregion
             
             #region ASB
-            /*
+            
             var asbNamespaceName = $"{projectName}{stackName}ns";
             var asbNamespace = new ASB.Namespace(asbNamespaceName, new ASB.NamespaceArgs
             {
@@ -59,7 +59,7 @@ namespace CrazyBike.Infra
             
             ASBPrimaryConnectionString = Output.Tuple(resourceGroup.Name, asbNamespace.Name).Apply(names =>
                 Output.Create(GetASBPrimaryConectionString(names.Item1, names.Item2)));
-            */
+            
             #endregion
             
             #region Log Analytics
