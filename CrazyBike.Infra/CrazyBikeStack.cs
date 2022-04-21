@@ -7,6 +7,7 @@ using Pulumi.AzureNative.OperationalInsights;
 using Pulumi.AzureNative.OperationalInsights.Inputs;
 using Pulumi.AzureNative.Resources;
 using Pulumi.Docker;
+using Pulumi.Docker.Inputs;
 using Deployment = Pulumi.Deployment;
 using ASB = Pulumi.AzureNative.ServiceBus;
 using App = Pulumi.AzureNative.App;
@@ -18,10 +19,9 @@ namespace CrazyBike.Infra
         #region Output
         [Output] public Output<string> ASBPrimaryConnectionString { get; set; }
         [Output] public Output<string> BuyUrl { get; set; }
-        
-        [Output] public Output<string> BuyImageOut { get; set; }
-        [Output] public Output<string> AssemblerImageOut { get; set; }
-        [Output] public Output<string> ShipperImageOut { get; set; }
+        [Output] public Output<string> BuyImageName { get; set; }
+        [Output] public Output<string> AssemblerImageName { get; set; }
+        [Output] public Output<string> ShipperImageName { get; set; }
         
         #endregion
         
@@ -113,7 +113,7 @@ namespace CrazyBike.Infra
             var buyImageName = $"{projectName}-buy";
             var buyImage = new Image(buyImageName, new ImageArgs
             {
-                ImageName = Output.Format($"{containerRegistry.LoginServer}/{buyImageName}:1.0.0"),
+                ImageName = Output.Format($"{containerRegistry.LoginServer}/{buyImageName}:latest"),
                 Build = new DockerBuild
                 {
                     Dockerfile = "./../CrazyBike.Buy/Dockerfile",
@@ -126,12 +126,12 @@ namespace CrazyBike.Infra
                     Password = adminPassword
                 }
             });
-            BuyImageOut = buyImage.ImageName;
+            BuyImageName = buyImage.BaseImageName;
             
             var assemblerImageName = $"{projectName}-assembler";
             var assemblerImage = new Image(assemblerImageName, new ImageArgs
             {
-                ImageName = Output.Format($"{containerRegistry.LoginServer}/{assemblerImageName}:1.0.0"),
+                ImageName = Output.Format($"{containerRegistry.LoginServer}/{assemblerImageName}:latest"),
                 Build = new DockerBuild
                 {
                     Dockerfile = "./../CrazyBike.Assembler/Dockerfile",
@@ -144,12 +144,12 @@ namespace CrazyBike.Infra
                     Password = adminPassword
                 }
             });
-            AssemblerImageOut = assemblerImage.ImageName;
+            AssemblerImageName = assemblerImage.BaseImageName;
             
             var shipperImageName = $"{projectName}-shipper";
             var shipperImage = new Image(shipperImageName, new ImageArgs
             {
-                ImageName = Output.Format($"{containerRegistry.LoginServer}/{shipperImageName}:1.0.0"),
+                ImageName = Output.Format($"{containerRegistry.LoginServer}/{shipperImageName}:latest"),
                 Build = new DockerBuild
                 {
                     Dockerfile = "./../CrazyBike.Shipper/Dockerfile",
@@ -162,7 +162,7 @@ namespace CrazyBike.Infra
                     Password = adminPassword
                 }
             });
-            ShipperImageOut = shipperImage.ImageName;
+            ShipperImageName = shipperImage.BaseImageName;
             
             #endregion 
 
@@ -222,7 +222,7 @@ namespace CrazyBike.Infra
                         new App.Inputs.ContainerArgs
                         {
                             Name = buyImageName,
-                            Image = buyImage.ImageName
+                            Image = buyImage.BaseImageName
                         }
                     }
                 }
@@ -262,7 +262,7 @@ namespace CrazyBike.Infra
                         new App.Inputs.ContainerArgs
                         {
                             Name = assemblerImageName,
-                            Image = assemblerImage.ImageName
+                            Image = assemblerImage.BaseImageName
                         }
                     }
                 }
@@ -301,7 +301,7 @@ namespace CrazyBike.Infra
                         new App.Inputs.ContainerArgs
                         {
                             Name = shipperImageName,
-                            Image = shipperImage.ImageName
+                            Image = shipperImage.BaseImageName
                         }
                     }
                 }
