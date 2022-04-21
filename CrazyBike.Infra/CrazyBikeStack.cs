@@ -19,6 +19,10 @@ namespace CrazyBike.Infra
         [Output] public Output<string> ASBPrimaryConnectionString { get; set; }
         [Output] public Output<string> BuyUrl { get; set; }
         
+        [Output] public Output<string> BuyImageOut { get; set; }
+        [Output] public Output<string> AssemblerImageOut { get; set; }
+        [Output] public Output<string> ShipperImageOut { get; set; }
+        
         #endregion
         
         public CrazyBikeStack()
@@ -109,7 +113,7 @@ namespace CrazyBike.Infra
             var buyImageName = $"{projectName}-buy";
             var buyImage = new Image(buyImageName, new ImageArgs
             {
-                ImageName = Output.Format($"{containerRegistry.LoginServer}/{buyImageName}:latest"),
+                ImageName = Output.Format($"{containerRegistry.LoginServer}/{buyImageName}:1.0.0"),
                 Build = new DockerBuild
                 {
                     Dockerfile = "./../CrazyBike.Buy/Dockerfile",
@@ -122,11 +126,12 @@ namespace CrazyBike.Infra
                     Password = adminPassword
                 }
             });
+            BuyImageOut = buyImage.ImageName;
             
             var assemblerImageName = $"{projectName}-assembler";
             var assemblerImage = new Image(assemblerImageName, new ImageArgs
             {
-                ImageName = Output.Format($"{containerRegistry.LoginServer}/{assemblerImageName}:latest"),
+                ImageName = Output.Format($"{containerRegistry.LoginServer}/{assemblerImageName}:1.0.0"),
                 Build = new DockerBuild
                 {
                     Dockerfile = "./../CrazyBike.Assembler/Dockerfile",
@@ -139,11 +144,12 @@ namespace CrazyBike.Infra
                     Password = adminPassword
                 }
             });
+            AssemblerImageOut = assemblerImage.ImageName;
             
             var shipperImageName = $"{projectName}-shipper";
             var shipperImage = new Image(shipperImageName, new ImageArgs
             {
-                ImageName = Output.Format($"{containerRegistry.LoginServer}/{shipperImageName}:latest"),
+                ImageName = Output.Format($"{containerRegistry.LoginServer}/{shipperImageName}:1.0.0"),
                 Build = new DockerBuild
                 {
                     Dockerfile = "./../CrazyBike.Shipper/Dockerfile",
@@ -156,6 +162,7 @@ namespace CrazyBike.Infra
                     Password = adminPassword
                 }
             });
+            ShipperImageOut = shipperImage.ImageName;
             
             #endregion 
 
