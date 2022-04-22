@@ -34,21 +34,23 @@ namespace CrazyBike.Buy.Controllers
         
         readonly ILogger<BikeController> logger;
         readonly IConfiguration configuration;
-        readonly ServiceBusAdministrationClient sbaClient;
-        readonly ServiceBusClient sbClient;
+        readonly ServiceBusAdministrationClient adminClient;
+        readonly ServiceBusClient client;
 
         public BikeController(ILogger<BikeController> logger, IConfiguration configuration, 
             IAzureClientFactory<ServiceBusAdministrationClient> sbaFactory, IAzureClientFactory<ServiceBusClient> sbFactory)
         {
             this.logger = logger;
             this.configuration = configuration;
-            sbaClient = sbaFactory.CreateClient("buyAdmin");
-            sbClient = sbFactory.CreateClient("buy");;
+            adminClient = sbaFactory.CreateClient("buyAdmin");
+            client = sbFactory.CreateClient("buy");;
         }
 
         [HttpPost("buy")]
         public async Task<IActionResult> Buy()
         {
+            await CreateQueueIfNotExists(AssemblerQueueName);
+            
             var bike = ProduceBike();
             var assembleBikeMessage = new AssembleBikeMessage(bike.Id, bike.Price, bike.Model, bike.Parts);
             var rawAssembleBikeMessage = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(assembleBikeMessage));
@@ -62,7 +64,7 @@ namespace CrazyBike.Buy.Controllers
             
             logger.LogInformation($"Sending buying request for bike {bike.Id}");
             
-            await using var sender = sbClient.CreateSender(AssemblerQueueName);
+            await using var sender = client.CreateSender(AssemblerQueueName);
             await sender.SendMessageAsync(message).ConfigureAwait(false);
             
             logger.LogInformation($"Bike {bike.Id} bought successfully!");
@@ -84,6 +86,18 @@ namespace CrazyBike.Buy.Controllers
                 .RuleFor(u => u.Parts, f => bikePartGen.Generate(f.Random.Number(6,bikePartNames.Length)));
             
             return bikeGen.Generate();
+        }
+        
+        async Task CreateQueueIfNotExists(string queueName)
+        {
+            if (!await adminClient.QueueExistsAsync(queueName))
+            {
+                var queueOptions = new CreateQueueOptions(queueName)
+                {  
+                    //LockDuration = TimeSpan.FromMinutes(5) 
+                };
+                await adminClient.CreateQueueAsync(queueOptions);    
+            }
         }
     }
 }

@@ -1,13 +1,13 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Pulumi;
+using Pulumi.AzureNative.App.Inputs;
 using Pulumi.AzureNative.ContainerRegistry;
 using Pulumi.AzureNative.ContainerRegistry.Inputs;
 using Pulumi.AzureNative.OperationalInsights;
 using Pulumi.AzureNative.OperationalInsights.Inputs;
 using Pulumi.AzureNative.Resources;
 using Pulumi.Docker;
-using Pulumi.Docker.Inputs;
 using Deployment = Pulumi.Deployment;
 using ASB = Pulumi.AzureNative.ServiceBus;
 using App = Pulumi.AzureNative.App;
@@ -19,8 +19,11 @@ namespace CrazyBike.Infra
         #region Output
         [Output] public Output<string> ASBPrimaryConnectionString { get; set; }
         [Output] public Output<string> BuyUrl { get; set; }
+        [Output] public Output<string> BuyBaseImageName { get; set; }
         [Output] public Output<string> BuyImageName { get; set; }
+        [Output] public Output<string> AssemblerBaseImageName { get; set; }
         [Output] public Output<string> AssemblerImageName { get; set; }
+        [Output] public Output<string> ShipperBaseImageName { get; set; }
         [Output] public Output<string> ShipperImageName { get; set; }
         
         #endregion
@@ -126,7 +129,8 @@ namespace CrazyBike.Infra
                     Password = adminPassword
                 }
             });
-            BuyImageName = buyImage.BaseImageName;
+            BuyBaseImageName = buyImage.BaseImageName;
+            BuyImageName = buyImage.ImageName;
             
             var assemblerImageName = $"{projectName}-assembler";
             var assemblerImage = new Image(assemblerImageName, new ImageArgs
@@ -144,7 +148,8 @@ namespace CrazyBike.Infra
                     Password = adminPassword
                 }
             });
-            AssemblerImageName = assemblerImage.BaseImageName;
+            AssemblerBaseImageName = assemblerImage.BaseImageName;
+            AssemblerImageName = assemblerImage.ImageName;
             
             var shipperImageName = $"{projectName}-shipper";
             var shipperImage = new Image(shipperImageName, new ImageArgs
@@ -162,7 +167,8 @@ namespace CrazyBike.Infra
                     Password = adminPassword
                 }
             });
-            ShipperImageName = shipperImage.BaseImageName;
+            ShipperBaseImageName = shipperImage.BaseImageName;
+            ShipperImageName = shipperImage.ImageName;
             
             #endregion 
 
@@ -173,10 +179,10 @@ namespace CrazyBike.Infra
             {
                 Name = kubeEnvName,
                 ResourceGroupName = resourceGroup.Name,
-                AppLogsConfiguration = new App.Inputs.AppLogsConfigurationArgs
+                AppLogsConfiguration = new AppLogsConfigurationArgs
                 {
                     Destination = "log-analytics",
-                    LogAnalyticsConfiguration = new App.Inputs.LogAnalyticsConfigurationArgs
+                    LogAnalyticsConfiguration = new LogAnalyticsConfigurationArgs
                     {
                         CustomerId = logWorkspace.CustomerId,
                         SharedKey = logWorkspaceSharedKeys.Apply(r => r.PrimarySharedKey)
@@ -190,16 +196,16 @@ namespace CrazyBike.Infra
                 Name = buyName,
                 ResourceGroupName = resourceGroup.Name,
                 ManagedEnvironmentId = kubeEnv.Id,
-                Configuration = new App.Inputs.ConfigurationArgs
+                Configuration = new ConfigurationArgs
                 {
-                    Ingress = new App.Inputs.IngressArgs
+                    Ingress = new IngressArgs
                     {
                         External = true,
                         TargetPort = 80
                     },
                     Registries =
                     {
-                        new App.Inputs.RegistryCredentialsArgs
+                        new RegistryCredentialsArgs
                         {
                             Server = containerRegistry.LoginServer,
                             Username = adminUsername,
@@ -215,14 +221,22 @@ namespace CrazyBike.Infra
                         }
                     }
                 },
-                Template = new App.Inputs.TemplateArgs
+                Template = new TemplateArgs
                 {
                     Containers = 
                     {
                         new App.Inputs.ContainerArgs
                         {
                             Name = buyImageName,
-                            Image = buyImage.BaseImageName
+                            Image = buyImage.ImageName,
+                            Env = new[]
+                            {
+                                new EnvironmentVarArgs
+                                {
+                                    Name = "ASBConnectionString",
+                                    Value = ASBPrimaryConnectionString 
+                                }
+                            }
                         }
                     }
                 }
@@ -235,11 +249,11 @@ namespace CrazyBike.Infra
                 Name = assemblerName,
                 ResourceGroupName = resourceGroup.Name,
                 ManagedEnvironmentId = kubeEnv.Id,
-                Configuration = new App.Inputs.ConfigurationArgs
+                Configuration = new ConfigurationArgs
                 {
                     Registries =
                     {
-                        new App.Inputs.RegistryCredentialsArgs
+                        new RegistryCredentialsArgs
                         {
                             Server = containerRegistry.LoginServer,
                             Username = adminUsername,
@@ -255,14 +269,22 @@ namespace CrazyBike.Infra
                         }
                     }
                 },
-                Template = new App.Inputs.TemplateArgs
+                Template = new TemplateArgs
                 {
                     Containers = 
                     {
                         new App.Inputs.ContainerArgs
                         {
                             Name = assemblerImageName,
-                            Image = assemblerImage.BaseImageName
+                            Image = assemblerImage.ImageName,
+                            Env = new[]
+                            {
+                                new EnvironmentVarArgs
+                                {
+                                    Name = "ASBConnectionString",
+                                    Value = ASBPrimaryConnectionString 
+                                }
+                            }
                         }
                     }
                 }
@@ -274,11 +296,11 @@ namespace CrazyBike.Infra
                 Name = shipperName,
                 ResourceGroupName = resourceGroup.Name,
                 ManagedEnvironmentId = kubeEnv.Id,
-                Configuration = new App.Inputs.ConfigurationArgs
+                Configuration = new ConfigurationArgs
                 {
                     Registries =
                     {
-                        new App.Inputs.RegistryCredentialsArgs
+                        new RegistryCredentialsArgs
                         {
                             Server = containerRegistry.LoginServer,
                             Username = adminUsername,
@@ -294,14 +316,22 @@ namespace CrazyBike.Infra
                         }
                     }
                 },
-                Template = new App.Inputs.TemplateArgs
+                Template = new TemplateArgs
                 {
                     Containers = 
                     {
                         new App.Inputs.ContainerArgs
                         {
                             Name = shipperImageName,
-                            Image = shipperImage.BaseImageName
+                            Image = shipperImage.ImageName,
+                            Env = new[]
+                            {
+                                new EnvironmentVarArgs
+                                {
+                                    Name = "ASBConnectionString",
+                                    Value = ASBPrimaryConnectionString 
+                                }
+                            }
                         }
                     }
                 }
