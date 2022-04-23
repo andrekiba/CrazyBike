@@ -11,6 +11,7 @@ using Pulumi.Docker;
 using Deployment = Pulumi.Deployment;
 using ASB = Pulumi.AzureNative.ServiceBus;
 using App = Pulumi.AzureNative.App;
+using ACR = Pulumi.AzureNative.ContainerRegistry;
 
 namespace CrazyBike.Infra
 {
@@ -170,9 +171,81 @@ namespace CrazyBike.Infra
             ShipperBaseImageName = shipperImage.BaseImageName;
             ShipperImageName = shipperImage.ImageName;
             
-            #endregion 
+            #endregion
+            
+            #region ACR tasks
+            /*
+            var adosConfig = new Pulumi.Config("ados");
+            var adosPat = adosConfig.RequireSecret("pat");
+            
+            const string assemblerBuildTaskName = "assembler-build";
+            var assemblerBuildTask = new ACR.Task(assemblerBuildTaskName, new TaskArgs
+            {
+                TaskName = assemblerBuildTaskName,
+                RegistryName = containerRegistry.Name,
+                ResourceGroupName = resourceGroup.Name,
+                Status = "Enabled",
+                IsSystemTask = false,
+                LogTemplate = "acr/tasks:{{.Run.OS}}",
+                AgentConfiguration = new AgentPropertiesArgs
+                {
+                    Cpu = 2
+                },
+                Identity = new IdentityPropertiesArgs
+                {
+                    Type = ACR.ResourceIdentityType.SystemAssigned
+                },
+                Platform = new PlatformPropertiesArgs
+                {
+                    Architecture = "amd64",
+                    Os = "Linux"
+                },
+                Step = new DockerBuildStepArgs
+                {
+                    
+                    ContextPath = "./..",
+                    DockerFilePath = "./../CrazyBike.Assembler/Dockerfile",
+                    ImageNames = 
+                    {
+                        $"{assemblerImageName}:latest"
+                    },
+                    IsPushEnabled = true,
+                    NoCache = false,
+                    Type = "Docker"
+                },
+                Trigger = new TriggerPropertiesArgs
+                {
+                    SourceTriggers = 
+                    {
+                        new SourceTriggerArgs
+                        {
+                            Name = "adosSourceTrigger",
+                            Status = "Enabled",
+                            SourceRepository = new SourcePropertiesArgs
+                            {
+                                Branch = stackName,
+                                RepositoryUrl = "https://elfoadosqa@dev.azure.com/elfoadosqa/CrazyBike/_git/CrazyBike",
+                                SourceControlAuthProperties = new AuthInfoArgs
+                                {
+                                    Token = adosPat,
+                                    TokenType = "PAT"
+                                },
+                                SourceControlType = "VisualStudioTeamService"
+                            },
+                            SourceTriggerEvents = 
+                            {
+                                "commit"
+                            }
+                        }
+                    }
+                }
+            });
+            */
+            #endregion
 
             #region Container Apps
+
+            const string asbConnectionSecret = "asb-connection";
 
             var kubeEnvName = $"{projectName}-{stackName}-env";
             var kubeEnv = new App.ManagedEnvironment(kubeEnvName, new App.ManagedEnvironmentArgs
@@ -218,6 +291,11 @@ namespace CrazyBike.Infra
                         {
                             Name = $"{containerRegistryName}-admin-pwd",
                             Value = adminPassword
+                        },
+                        new App.Inputs.SecretArgs
+                        {
+                            Name = asbConnectionSecret,
+                            Value = ASBPrimaryConnectionString
                         }
                     }
                 },
@@ -234,7 +312,7 @@ namespace CrazyBike.Infra
                                 new EnvironmentVarArgs
                                 {
                                     Name = "ASBConnectionString",
-                                    Value = ASBPrimaryConnectionString 
+                                    SecretRef = asbConnectionSecret
                                 }
                             }
                         }
@@ -266,6 +344,11 @@ namespace CrazyBike.Infra
                         {
                             Name = $"{containerRegistryName}-admin-pwd",
                             Value = adminPassword
+                        },
+                        new App.Inputs.SecretArgs
+                        {
+                            Name = asbConnectionSecret,
+                            Value = ASBPrimaryConnectionString
                         }
                     }
                 },
@@ -282,8 +365,46 @@ namespace CrazyBike.Infra
                                 new EnvironmentVarArgs
                                 {
                                     Name = "ASBConnectionString",
-                                    Value = ASBPrimaryConnectionString 
+                                    SecretRef = asbConnectionSecret 
                                 }
+                            }
+                        }
+                    },
+                    Scale = new ScaleArgs
+                    {
+                        MinReplicas = 1,
+                        MaxReplicas = 10,
+                        Rules = new List<ScaleRuleArgs>
+                        {
+                            new ScaleRuleArgs
+                            {
+                                Name = "assembler-queue-length",
+                                Custom = new CustomScaleRuleArgs
+                                {
+                                    Type = "azure-servicebus",
+                                    Metadata =
+                                    {
+                                        {"queueName", "crazybike-assembler"},
+                                        {"messageCount", "10"}
+                                    },
+                                    Auth = new ScaleRuleAuthArgs
+                                    {
+                                        TriggerParameter = "connection",
+                                        SecretRef = asbConnectionSecret
+                                    }
+                                }
+                                /*
+                                AzureQueue = new QueueScaleRuleArgs
+                                {
+                                    QueueName = "crazybike-assembler",
+                                    QueueLength = 10,
+                                    Auth = new ScaleRuleAuthArgs
+                                    {
+                                        TriggerParameter = "connection",
+                                        SecretRef = asbConnectionSecret
+                                    }
+                                }
+                                */
                             }
                         }
                     }
@@ -313,6 +434,11 @@ namespace CrazyBike.Infra
                         {
                             Name = $"{containerRegistryName}-admin-pwd",
                             Value = adminPassword
+                        },
+                        new App.Inputs.SecretArgs
+                        {
+                            Name = asbConnectionSecret,
+                            Value = ASBPrimaryConnectionString
                         }
                     }
                 },
@@ -329,8 +455,46 @@ namespace CrazyBike.Infra
                                 new EnvironmentVarArgs
                                 {
                                     Name = "ASBConnectionString",
-                                    Value = ASBPrimaryConnectionString 
+                                    SecretRef = asbConnectionSecret
                                 }
+                            }
+                        }
+                    },
+                    Scale = new ScaleArgs
+                    {
+                        MinReplicas = 1,
+                        MaxReplicas = 10,
+                        Rules = new List<ScaleRuleArgs>
+                        {
+                            new ScaleRuleArgs
+                            {
+                                Name = "shipper-queue-length",
+                                Custom = new CustomScaleRuleArgs
+                                {
+                                    Type = "azure-servicebus",
+                                    Metadata =
+                                    {
+                                        {"queueName", "crazybike-shipper"},
+                                        {"messageCount", "10"}
+                                    },
+                                    Auth = new ScaleRuleAuthArgs
+                                    {
+                                        TriggerParameter = "connection",
+                                        SecretRef = asbConnectionSecret
+                                    }
+                                } 
+                                /*
+                                AzureQueue = new QueueScaleRuleArgs
+                                {
+                                    QueueName = "crazybike-shipper",
+                                    QueueLength = 10,
+                                    Auth = new ScaleRuleAuthArgs
+                                    {
+                                        TriggerParameter = "connection",
+                                        SecretRef = asbConnectionSecret
+                                    }
+                                }
+                                */
                             }
                         }
                     }
