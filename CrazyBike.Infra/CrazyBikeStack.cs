@@ -316,6 +316,25 @@ namespace CrazyBike.Infra
                                 }
                             }
                         }
+                    },
+                    Scale = new ScaleArgs
+                    {
+                        MinReplicas = 0,
+                        MaxReplicas = 5,
+                        Rules = new List<ScaleRuleArgs>
+                        {
+                            new ScaleRuleArgs
+                            {
+                                Name = "buy-http-requests",
+                                Http = new HttpScaleRuleArgs
+                                {
+                                    Metadata =
+                                    {
+                                        {"concurrentRequests", "50"}
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             });
@@ -372,7 +391,7 @@ namespace CrazyBike.Infra
                     },
                     Scale = new ScaleArgs
                     {
-                        MinReplicas = 1,
+                        MinReplicas = 0,
                         MaxReplicas = 10,
                         Rules = new List<ScaleRuleArgs>
                         {
@@ -393,18 +412,6 @@ namespace CrazyBike.Infra
                                         SecretRef = asbConnectionSecret
                                     }
                                 }
-                                /*
-                                AzureQueue = new QueueScaleRuleArgs
-                                {
-                                    QueueName = "crazybike-assembler",
-                                    QueueLength = 10,
-                                    Auth = new ScaleRuleAuthArgs
-                                    {
-                                        TriggerParameter = "connection",
-                                        SecretRef = asbConnectionSecret
-                                    }
-                                }
-                                */
                             }
                         }
                     }
@@ -462,7 +469,7 @@ namespace CrazyBike.Infra
                     },
                     Scale = new ScaleArgs
                     {
-                        MinReplicas = 1,
+                        MinReplicas = 0,
                         MaxReplicas = 10,
                         Rules = new List<ScaleRuleArgs>
                         {
@@ -482,19 +489,7 @@ namespace CrazyBike.Infra
                                         TriggerParameter = "connection",
                                         SecretRef = asbConnectionSecret
                                     }
-                                } 
-                                /*
-                                AzureQueue = new QueueScaleRuleArgs
-                                {
-                                    QueueName = "crazybike-shipper",
-                                    QueueLength = 10,
-                                    Auth = new ScaleRuleAuthArgs
-                                    {
-                                        TriggerParameter = "connection",
-                                        SecretRef = asbConnectionSecret
-                                    }
                                 }
-                                */
                             }
                         }
                     }
