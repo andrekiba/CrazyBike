@@ -32,7 +32,7 @@ namespace CrazyBike.Buy
                 {
                     var logger = new LoggerConfiguration()
                         .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level}] {SourceContext}{NewLine}{Message:lj}{NewLine}{Exception}{NewLine}", theme: AnsiConsoleTheme.Code)
-                        .MinimumLevel.Error()
+                        .MinimumLevel.Information()
                         .CreateLogger();
 
                     loggingBuilder.AddSerilog(logger);

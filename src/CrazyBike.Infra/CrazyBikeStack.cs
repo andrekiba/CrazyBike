@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -613,12 +614,17 @@ namespace CrazyBike.Infra
         static string GenerateHash(string context)
         {
             var allMd5Bytes = new List<byte>();
-            var excludedDirectories = new[] { "bin", "obj" };
+            var excludedDirectories = new[] { "bin", "obj", ".idea" };
+            var excludedFiles = new[] {"appsettings.secret.json", "appsettings.development.json", ".override.yml"};
             var files = Directory.GetFiles(context, "*", SearchOption.AllDirectories);
             foreach (var fileName in files)
             {
                 using var md5 = MD5.Create();
                 var fileInfo = new FileInfo(fileName);
+                
+                if(excludedFiles.Any(x => fileName.EndsWith(x, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+                
                 if (excludedDirectories.Any(excludedDirectory => fileInfo.Directory != null && fileInfo.Directory.Name == excludedDirectory))
                     continue;
                 
