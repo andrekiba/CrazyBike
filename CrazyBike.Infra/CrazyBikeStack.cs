@@ -1,4 +1,10 @@
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Threading;
 using System.Threading.Tasks;
 using Pulumi;
 using Pulumi.AzureNative.App.Inputs;
@@ -8,6 +14,7 @@ using Pulumi.AzureNative.OperationalInsights;
 using Pulumi.AzureNative.OperationalInsights.Inputs;
 using Pulumi.AzureNative.Resources;
 using Pulumi.Docker;
+using Pulumi.Docker.Inputs;
 using Deployment = Pulumi.Deployment;
 using ASB = Pulumi.AzureNative.ServiceBus;
 using App = Pulumi.AzureNative.App;
@@ -20,17 +27,19 @@ namespace CrazyBike.Infra
         #region Output
         [Output] public Output<string> ASBPrimaryConnectionString { get; set; }
         [Output] public Output<string> BuyUrl { get; set; }
-        [Output] public Output<string> BuyBaseImageName { get; set; }
         [Output] public Output<string> BuyImageName { get; set; }
-        [Output] public Output<string> AssemblerBaseImageName { get; set; }
         [Output] public Output<string> AssemblerImageName { get; set; }
-        [Output] public Output<string> ShipperBaseImageName { get; set; }
         [Output] public Output<string> ShipperImageName { get; set; }
         
         #endregion
         
         public CrazyBikeStack()
         {
+            // while (!Debugger.IsAttached)
+            // {
+            //     Thread.Sleep(100);
+            // }
+            
             const string projectName = "crazybike";
             var stackName = Deployment.Instance.StackName;
             //var azureConfig = new Config("azure-native");
@@ -114,14 +123,95 @@ namespace CrazyBike.Infra
             
             #region Docker images
             
+            var dockerProvider = new Provider("azure_acr", new ProviderArgs
+            {
+               RegistryAuth = new ProviderRegistryAuthArgs
+               {
+                   Address = containerRegistry.LoginServer,
+                   Username = adminUsername,
+                   Password = adminPassword
+               }
+            });
+
+            var buildContext = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
+            
+            var buyContext = $"{buildContext}/CrazyBike.Buy";
+            var buyImageName = $"{projectName}-buy";
+            var buyContextHash = GenerateHash(buyContext);
+            var buyImage = new RegistryImage(buyImageName, new RegistryImageArgs
+            {
+                Name = Output.Format($"{containerRegistry.LoginServer}/{buyImageName}:latest-{buyContextHash}"),
+                Build = new RegistryImageBuildArgs
+                {
+                    Dockerfile = "Dockerfile.buy",
+                    Context = buildContext,
+                    BuildId = buyContextHash
+                }
+            }, new CustomResourceOptions
+            {
+                Provider = dockerProvider
+            });
+            BuyImageName = buyImage.Name;
+            
+            // var buyRemoteImage = new RemoteImage(buyImageName, new RemoteImageArgs
+            // {
+            //     Name = Output.Format($"{buyImage.Name}-{buyImage.Build.Apply(b => b.BuildId)}"),
+            //     PullTriggers = 
+            //     {
+            //         buyImage.Sha256Digest
+            //     }
+            // }, new CustomResourceOptions
+            // {
+            //     Provider = dockerProvider
+            // });
+
+            var assemblerContext = $"{buildContext}/CrazyBike.Assembler";
+            var assemblerImageName = $"{projectName}-assembler";
+            var assemblerContextHash = GenerateHash(assemblerContext);
+            var assemblerImage = new RegistryImage(assemblerImageName, new RegistryImageArgs
+            {
+                Name = Output.Format($"{containerRegistry.LoginServer}/{assemblerImageName}:latest-{assemblerContextHash}"),
+                Build = new RegistryImageBuildArgs
+                {
+                    Dockerfile = "Dockerfile.assembler",
+                    Context = buildContext,
+                    BuildId = assemblerContextHash
+                }
+            }, new CustomResourceOptions
+            {
+                Provider = dockerProvider
+            });
+            AssemblerImageName = assemblerImage.Name;
+            
+            var shipperContext = $"{buildContext}/CrazyBike.Shipper";
+            var shipperImageName = $"{projectName}-shipper";
+            var shipperContextHash = GenerateHash(shipperContext);
+            var shipperImage = new RegistryImage(shipperImageName, new RegistryImageArgs
+            {
+                Name = Output.Format($"{containerRegistry.LoginServer}/{shipperImageName}:latest-{shipperContextHash}"),
+                Build = new RegistryImageBuildArgs
+                {
+                    Dockerfile = "Dockerfile.shipper",
+                    Context = buildContext,
+                    BuildId = shipperContextHash
+                }
+            }, new CustomResourceOptions
+            {
+                Provider = dockerProvider
+            });
+            ShipperImageName = shipperImage.Name;
+            
+            /*
+            var buyContext = $"{buildContext}/CrazyBike.Buy";
+            var buyContextHash = GenerateHash(buyContext);
             var buyImageName = $"{projectName}-buy";
             var buyImage = new Image(buyImageName, new ImageArgs
             {
-                ImageName = Output.Format($"{containerRegistry.LoginServer}/{buyImageName}:latest"),
+                ImageName = Output.Format($"{containerRegistry.LoginServer}/{buyImageName}:latest-{buyContextHash}"),
                 Build = new DockerBuild
                 {
-                    Dockerfile = "./../CrazyBike.Buy/Dockerfile",
-                    Context = "./.."
+                    Dockerfile = $"{buyContext}/Dockerfile",
+                    Context = buildContext
                 },
                 Registry = new ImageRegistry
                 {
@@ -130,17 +220,18 @@ namespace CrazyBike.Infra
                     Password = adminPassword
                 }
             });
-            BuyBaseImageName = buyImage.BaseImageName;
             BuyImageName = buyImage.ImageName;
             
+            var assemblerContext = $"{buildContext}/CrazyBike.Assembler";
+            var assemblerContextHash = GenerateHash(assemblerContext);
             var assemblerImageName = $"{projectName}-assembler";
             var assemblerImage = new Image(assemblerImageName, new ImageArgs
             {
-                ImageName = Output.Format($"{containerRegistry.LoginServer}/{assemblerImageName}:latest"),
+                ImageName = Output.Format($"{containerRegistry.LoginServer}/{assemblerImageName}:latest-{assemblerContextHash}"),
                 Build = new DockerBuild
                 {
-                    Dockerfile = "./../CrazyBike.Assembler/Dockerfile",
-                    Context = "./.."
+                    Dockerfile = $"{assemblerContext}/Dockerfile",
+                    Context = buildContext
                 },
                 Registry = new ImageRegistry
                 {
@@ -149,17 +240,18 @@ namespace CrazyBike.Infra
                     Password = adminPassword
                 }
             });
-            AssemblerBaseImageName = assemblerImage.BaseImageName;
             AssemblerImageName = assemblerImage.ImageName;
             
+            var shipperContext = $"{buildContext}/CrazyBike.Shipper";
+            var shipperContextHash = GenerateHash(shipperContext);
             var shipperImageName = $"{projectName}-shipper";
             var shipperImage = new Image(shipperImageName, new ImageArgs
             {
-                ImageName = Output.Format($"{containerRegistry.LoginServer}/{shipperImageName}:latest"),
+                ImageName = Output.Format($"{containerRegistry.LoginServer}/{shipperImageName}:latest-{shipperContextHash}"),
                 Build = new DockerBuild
                 {
-                    Dockerfile = "./../CrazyBike.Shipper/Dockerfile",
-                    Context = "./.."
+                    Dockerfile = $"{shipperContext}/Dockerfile",
+                    Context = buildContext
                 },
                 Registry = new ImageRegistry
                 {
@@ -168,9 +260,8 @@ namespace CrazyBike.Infra
                     Password = adminPassword
                 }
             });
-            ShipperBaseImageName = shipperImage.BaseImageName;
             ShipperImageName = shipperImage.ImageName;
-            
+            */
             #endregion
             
             #region ACR tasks
@@ -178,7 +269,7 @@ namespace CrazyBike.Infra
             var adosConfig = new Pulumi.Config("ados");
             var adosPat = adosConfig.RequireSecret("pat");
             
-            const string assemblerBuildTaskName = "assembler-build";
+            const string assemblerBuildTaskName = "assembler-build-task";
             var assemblerBuildTask = new ACR.Task(assemblerBuildTaskName, new TaskArgs
             {
                 TaskName = assemblerBuildTaskName,
@@ -306,7 +397,7 @@ namespace CrazyBike.Infra
                         new App.Inputs.ContainerArgs
                         {
                             Name = buyImageName,
-                            Image = buyImage.ImageName,
+                            Image = buyImage.Name,
                             Env = new[]
                             {
                                 new EnvironmentVarArgs
@@ -337,6 +428,9 @@ namespace CrazyBike.Infra
                         }
                     }
                 }
+            }, new CustomResourceOptions
+            {
+                IgnoreChanges = new List<string> {"tags"}
             });
             BuyUrl = Output.Format($"https://{buy.Configuration.Apply(c => c.Ingress).Apply(i => i.Fqdn)}");
             
@@ -378,7 +472,7 @@ namespace CrazyBike.Infra
                         new App.Inputs.ContainerArgs
                         {
                             Name = assemblerImageName,
-                            Image = assemblerImage.ImageName,
+                            Image = assemblerImage.Name,
                             Env = new[]
                             {
                                 new EnvironmentVarArgs
@@ -416,6 +510,9 @@ namespace CrazyBike.Infra
                         }
                     }
                 }
+            }, new CustomResourceOptions
+            {
+                IgnoreChanges = new List<string> {"tags"}
             });
             
             var shipperName = $"{projectName}-{stackName}-ca-shipper";
@@ -456,7 +553,7 @@ namespace CrazyBike.Infra
                         new App.Inputs.ContainerArgs
                         {
                             Name = shipperImageName,
-                            Image = shipperImage.ImageName,
+                            Image = shipperImage.Name,
                             Env = new[]
                             {
                                 new EnvironmentVarArgs
@@ -494,6 +591,9 @@ namespace CrazyBike.Infra
                         }
                     }
                 }
+            }, new CustomResourceOptions
+            {
+                IgnoreChanges = new List<string> {"tags"}
             });
             
             #endregion
@@ -509,5 +609,31 @@ namespace CrazyBike.Infra
             });
             return result.PrimaryConnectionString;
         }
+        
+        static string GenerateHash(string context)
+        {
+            var allMd5Bytes = new List<byte>();
+            var excludedDirectories = new[] { "bin", "obj" };
+            var files = Directory.GetFiles(context, "*", SearchOption.AllDirectories);
+            foreach (var fileName in files)
+            {
+                using var md5 = MD5.Create();
+                var fileInfo = new FileInfo(fileName);
+                if (excludedDirectories.Any(excludedDirectory => fileInfo.Directory != null && fileInfo.Directory.Name == excludedDirectory))
+                    continue;
+                
+                using var stream = File.OpenRead(fileName);
+                var md5Bytes = md5.ComputeHash(stream);
+                
+                allMd5Bytes.AddRange(md5Bytes);
+            }
+
+            using var hash = MD5.Create();
+            var md5AllBytes = hash.ComputeHash(allMd5Bytes.ToArray());
+            var result = BytesToHash(md5AllBytes);
+            
+            return result;
+        }
+        static string BytesToHash(IEnumerable<byte> md5Bytes) => string.Join("", md5Bytes.Select(ba => ba.ToString("x2")));
     }
 }

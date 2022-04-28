@@ -5,7 +5,7 @@ services:
     image: andrekiba/crazy-bike-buy:v1
     build:
       context: .
-      dockerfile: CrazyBike.Buy/Dockerfile
+      dockerfile: Dockerfile.buy
     ports:
       - "7071:80"
     environment:
@@ -15,7 +15,7 @@ services:
     image:  andrekiba/crazy-bike-assembler:v1
     build:
       context: .
-      dockerfile: CrazyBike.Assembler/Dockerfile
+      dockerfile: Dockerfile.assembler
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - FakeWorkDuration=00:02:00
@@ -24,7 +24,7 @@ services:
     image: andrekiba/crazy-bike-shipper:v1
     build:
       context: .
-      dockerfile: CrazyBike.Shipper/Dockerfile
+      dockerfile: Dockerfile.shipper
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASBConnectionString=<asb-connection-string>
