@@ -134,6 +134,9 @@ namespace CrazyBike.Infra
                    Username = adminUsername,
                    Password = adminPassword
                }
+            }, new CustomResourceOptions
+            {
+                IgnoreChanges = new List<string> {"host"}
             });
 
             var buildContext = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
@@ -617,7 +620,7 @@ namespace CrazyBike.Infra
         {
             var allMd5Bytes = new List<byte>();
             var excludedDirectories = new[] { "bin", "obj", ".idea" };
-            var excludedFiles = new[] {"appsettings.secret.json", "appsettings.development.json", ".override.yml"};
+            var excludedFiles = new[] {".DS_Store", "appsettings.secret.json", "appsettings.development.json", ".override.yml"};
             var files = Directory.GetFiles(context, "*", SearchOption.AllDirectories);
             foreach (var fileName in files)
             {
