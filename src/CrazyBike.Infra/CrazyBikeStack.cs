@@ -126,6 +126,7 @@ namespace CrazyBike.Infra
             
             var dockerProvider = new Provider("azure_acr", new ProviderArgs
             {
+               Host = "npipe:////.//pipe//docker_engine",
                RegistryAuth = new ProviderRegistryAuthArgs
                {
                    Address = containerRegistry.LoginServer,

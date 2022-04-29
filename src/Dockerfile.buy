@@ -9,7 +9,7 @@ COPY ["CrazyBike.Buy/CrazyBike.Buy.csproj", "CrazyBike.Buy/"]
 COPY ["CrazyBike.Shared/CrazyBike.Shared.csproj", "CrazyBike.Shared/"]
 RUN dotnet restore "CrazyBike.Buy/CrazyBike.Buy.csproj"
 COPY . .
-WORKDIR "/CrazyBike/CrazyBike.Buy"
+WORKDIR "/src/CrazyBike.Buy"
 RUN dotnet build "CrazyBike.Buy.csproj" -c Release -o /app/build
 
 FROM build AS publish

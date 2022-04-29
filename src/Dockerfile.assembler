@@ -7,7 +7,7 @@ COPY ["CrazyBike.Assembler/CrazyBike.Assembler.csproj", "CrazyBike.Assembler/"]
 COPY ["CrazyBike.Shared/CrazyBike.Shared.csproj", "CrazyBike.Shared/"]
 RUN dotnet restore "CrazyBike.Assembler/CrazyBike.Assembler.csproj"
 COPY . .
-WORKDIR "/CrazyBike/CrazyBike.Assembler"
+WORKDIR "/src/CrazyBike.Assembler"
 RUN dotnet build "CrazyBike.Assembler.csproj" -c Release -o /app/build
 
 FROM build AS publish
