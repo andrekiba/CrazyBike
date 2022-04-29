@@ -134,9 +134,6 @@ namespace CrazyBike.Infra
                    Username = adminUsername,
                    Password = adminPassword
                }
-            }, new CustomResourceOptions
-            {
-                IgnoreChanges = new List<string> {"host"}
             });
 
             var buildContext = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
