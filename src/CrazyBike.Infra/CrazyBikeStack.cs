@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
@@ -126,7 +127,7 @@ namespace CrazyBike.Infra
             
             var dockerProvider = new Provider("azure_acr", new ProviderArgs
             {
-               Host = "npipe:////.//pipe//docker_engine",
+               Host = OperatingSystem.IsMacOS() || OperatingSystem.IsLinux() ? "unix:///var/run/docker.sock" : "npipe:////.//pipe//docker_engine",
                RegistryAuth = new ProviderRegistryAuthArgs
                {
                    Address = containerRegistry.LoginServer,
@@ -642,5 +643,17 @@ namespace CrazyBike.Infra
             return result;
         }
         static string BytesToHash(IEnumerable<byte> md5Bytes) => string.Join("", md5Bytes.Select(ba => ba.ToString("x2")));
+    }
+    
+    public static class OperatingSystem
+    {
+        public static bool IsWindows() =>
+            RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+
+        public static bool IsMacOS() =>
+            RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+
+        public static bool IsLinux() =>
+            RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
     }
 }
