@@ -126,9 +126,9 @@ namespace CrazyBike.Infra
                }
             });
 
-            var buildContext = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
-            
-            var buyContext = $"{buildContext}/CrazyBike.Buy";
+            var buildContext = Path.GetFullPath(Directory.GetParent(Directory.GetCurrentDirectory()).FullName);
+
+            var buyContext = Path.Combine(buildContext,"CrazyBike.Buy");
             var buyImageName = $"{projectName}-buy";
             var buyContextHash = buyContext.GenerateHash();
             var buyImage = new RegistryImage(buyImageName, new RegistryImageArgs
@@ -158,7 +158,7 @@ namespace CrazyBike.Infra
             //     Provider = dockerProvider
             // });
 
-            var assemblerContext = $"{buildContext}/CrazyBike.Assembler";
+            var assemblerContext = Path.Combine(buildContext,"CrazyBike.Assembler");
             var assemblerImageName = $"{projectName}-assembler";
             var assemblerContextHash = assemblerContext.GenerateHash();
             var assemblerImage = new RegistryImage(assemblerImageName, new RegistryImageArgs
@@ -176,7 +176,7 @@ namespace CrazyBike.Infra
             });
             AssemblerImageName = assemblerImage.Name;
             
-            var shipperContext = $"{buildContext}/CrazyBike.Shipper";
+            var shipperContext = Path.Combine(buildContext,"CrazyBike.Shipper");
             var shipperImageName = $"{projectName}-shipper";
             var shipperContextHash = shipperContext.GenerateHash();
             var shipperImage = new RegistryImage(shipperImageName, new RegistryImageArgs
