@@ -11,6 +11,7 @@ namespace CrazyBike.Infra
     {
         public static string GenerateHash(this string context)
         {
+            const string unixLineEnding = "\n";
             var allMd5Bytes = new List<byte>();
             var excludedDirectories = new[] { "bin", "obj", ".idea" };
             var excludedFiles = new[] {".DS_Store", "appsettings.secret.json", "appsettings.development.json", ".override.yml"};
@@ -28,10 +29,12 @@ namespace CrazyBike.Infra
                     if(dirs.Intersect(excludedDirectories, StringComparer.OrdinalIgnoreCase).Any())
                         continue;
                 }
-                
+
+                var lines = File.ReadAllLines(fileName).Select(l => l.NormalizeLineEndings(unixLineEnding));
+                var md5Bytes = System.Text.Encoding.UTF8.GetBytes(string.Join(unixLineEnding, lines));
                 using var md5 = MD5.Create();
-                using var stream = File.OpenRead(fileName);
-                var md5Bytes = md5.ComputeHash(stream);
+                //using var stream = File.OpenRead(fileName);
+                //var md5Bytes = md5.ComputeHash(stream);
                 allMd5Bytes.AddRange(md5Bytes);
             }
 
@@ -42,6 +45,36 @@ namespace CrazyBike.Infra
             return result;
         }
         static string BytesToHash(this IEnumerable<byte> md5Bytes) => string.Join("", md5Bytes.Select(ba => ba.ToString("x2")));
+        
+        static string NormalizeLineEndings(this string line, string targetLineEnding = null)
+        {
+            if (string.IsNullOrEmpty(line))
+                return line;
+
+            targetLineEnding ??= Environment.NewLine;
+
+            const string unixLineEnding = "\n";
+            const string windowsLineEnding = "\r\n";
+            const string macLineEnding = "\r";
+
+            if (targetLineEnding != unixLineEnding && targetLineEnding != windowsLineEnding &&
+                targetLineEnding != macLineEnding)
+            {
+                throw new ArgumentOutOfRangeException(nameof(targetLineEnding),
+                    "Unknown target line ending character(s).");
+            }
+
+            line = line
+                .Replace(windowsLineEnding, unixLineEnding)
+                .Replace(macLineEnding, unixLineEnding);
+
+            if (targetLineEnding != unixLineEnding)
+            {
+                line = line.Replace(unixLineEnding, targetLineEnding);
+            }
+
+            return line;
+        }
     }
 
     public static class OperatingSystem
