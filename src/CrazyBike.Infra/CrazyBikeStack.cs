@@ -1,11 +1,6 @@
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Pulumi;
@@ -37,28 +32,23 @@ namespace CrazyBike.Infra
         
         public CrazyBikeStack()
         {
-            // while (!Debugger.IsAttached)
-            // {
-            //     Thread.Sleep(100);
-            // }
+            /*
+            while (!Debugger.IsAttached)
+            {
+                Thread.Sleep(100);
+            }
+            */
             
             const string projectName = "crazybike";
             var stackName = Deployment.Instance.StackName;
-            //var azureConfig = new Config("azure-native");
-            //var location = azureConfig.Require("location");
-            var ignoreChanges = new CustomResourceOptions
-            {
-                IgnoreChanges = new List<string> {"tags"}
-            };
             
             #region Resource Group
             
             var resourceGroupName = $"{projectName}-{stackName}-rg";
             var resourceGroup = new ResourceGroup(resourceGroupName, new ResourceGroupArgs
             {
-                //Location = location,
                 ResourceGroupName = resourceGroupName
-            }, ignoreChanges);
+            });
 
             #endregion
             
@@ -74,7 +64,7 @@ namespace CrazyBike.Infra
                     Name = ASB.SkuName.Standard,
                     Tier = ASB.SkuTier.Standard
                 }
-            }, ignoreChanges);
+            });
             
             ASBPrimaryConnectionString = Output.Tuple(resourceGroup.Name, asbNamespace.Name).Apply(names =>
                 Output.Create(GetASBPrimaryConectionString(names.Item1, names.Item2)));
@@ -140,7 +130,7 @@ namespace CrazyBike.Infra
             
             var buyContext = $"{buildContext}/CrazyBike.Buy";
             var buyImageName = $"{projectName}-buy";
-            var buyContextHash = GenerateHash(buyContext);
+            var buyContextHash = buyContext.GenerateHash();
             var buyImage = new RegistryImage(buyImageName, new RegistryImageArgs
             {
                 Name = Output.Format($"{containerRegistry.LoginServer}/{buyImageName}:latest-{buyContextHash}"),
@@ -170,7 +160,7 @@ namespace CrazyBike.Infra
 
             var assemblerContext = $"{buildContext}/CrazyBike.Assembler";
             var assemblerImageName = $"{projectName}-assembler";
-            var assemblerContextHash = GenerateHash(assemblerContext);
+            var assemblerContextHash = assemblerContext.GenerateHash();
             var assemblerImage = new RegistryImage(assemblerImageName, new RegistryImageArgs
             {
                 Name = Output.Format($"{containerRegistry.LoginServer}/{assemblerImageName}:latest-{assemblerContextHash}"),
@@ -188,7 +178,7 @@ namespace CrazyBike.Infra
             
             var shipperContext = $"{buildContext}/CrazyBike.Shipper";
             var shipperImageName = $"{projectName}-shipper";
-            var shipperContextHash = GenerateHash(shipperContext);
+            var shipperContextHash = shipperContext.GenerateHash();
             var shipperImage = new RegistryImage(shipperImageName, new RegistryImageArgs
             {
                 Name = Output.Format($"{containerRegistry.LoginServer}/{shipperImageName}:latest-{shipperContextHash}"),
@@ -612,48 +602,5 @@ namespace CrazyBike.Infra
             });
             return result.PrimaryConnectionString;
         }
-        
-        static string GenerateHash(string context)
-        {
-            var allMd5Bytes = new List<byte>();
-            var excludedDirectories = new[] { "bin", "obj", ".idea" };
-            var excludedFiles = new[] {".DS_Store", "appsettings.secret.json", "appsettings.development.json", ".override.yml"};
-            var files = Directory.GetFiles(context, "*", SearchOption.AllDirectories);
-            foreach (var fileName in files)
-            {
-                using var md5 = MD5.Create();
-                var fileInfo = new FileInfo(fileName);
-                
-                if(excludedFiles.Any(x => fileName.EndsWith(x, StringComparison.OrdinalIgnoreCase)))
-                    continue;
-                
-                if (excludedDirectories.Any(excludedDirectory => fileInfo.Directory != null && fileInfo.Directory.Name == excludedDirectory))
-                    continue;
-                
-                using var stream = File.OpenRead(fileName);
-                var md5Bytes = md5.ComputeHash(stream);
-                
-                allMd5Bytes.AddRange(md5Bytes);
-            }
-
-            using var hash = MD5.Create();
-            var md5AllBytes = hash.ComputeHash(allMd5Bytes.ToArray());
-            var result = BytesToHash(md5AllBytes);
-            
-            return result;
-        }
-        static string BytesToHash(IEnumerable<byte> md5Bytes) => string.Join("", md5Bytes.Select(ba => ba.ToString("x2")));
-    }
-    
-    public static class OperatingSystem
-    {
-        public static bool IsWindows() =>
-            RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
-
-        public static bool IsMacOS() =>
-            RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
-
-        public static bool IsLinux() =>
-            RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
     }
 }
