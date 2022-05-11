@@ -338,7 +338,7 @@ namespace CrazyBike.Infra
                     {
                         new SourceTriggerArgs
                         {
-                            Name = "adosSourceTrigger",
+                            Name = "githubSourceTrigger",
                             Status = TriggerStatus.Enabled,
                             SourceRepository = new SourcePropertiesArgs
                             {
