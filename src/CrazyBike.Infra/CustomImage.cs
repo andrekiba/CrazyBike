@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using Pulumi;
 using Pulumi.Command.Local;
 
@@ -10,7 +10,9 @@ namespace CrazyBike.Infra
 {
     public class CustomImage: ComponentResource
     {
-        public Output<string> ImageName { get; }
+        [Output] public Output<string> Name { get; set; }
+        //[Output] public Output<string> StdOut {get; set;}
+        //[Output] public Output<string> StdErr {get; set;}
         
         const string RootAlphaCustomImageTypeName = "alpha:CustomImage";
         
@@ -18,85 +20,73 @@ namespace CrazyBike.Infra
             : base(RootAlphaCustomImageTypeName, name, options)
         {
             // Normalize the context to the base of the pulumi project
-            var context = Path.GetFullPath(args.Context);
-
-            var hash = GenerateHash(context);
+            //var context = Path.GetFullPath(args.Context);
+            var context = args.Context;
             
-            ImageName = Output.Create($"{args.RegistryServer}/{name}:{hash}");
+            var hash = args.BuildId + "1";
+            
+            Name = Output.Format($"{args.RegistryArgs.Server}/{name}:latest-{hash}");
 
-            var buildArgsOutputs = args.BuildArgs.Select(kvp => Output.Create($"--build-arg {kvp.Key}={kvp.Value}")).ToList();
+            var buildArgsOutputs = args.BuildArgs.Select(kvp => Output.Format($"--build-arg {kvp.Key}={kvp.Value}")).ToList();
 
             var buildArgs = Output.All(buildArgsOutputs).Apply(a => string.Join(" ", a));
 
-            var dockerFile = args.Dockerfile != null
-                ? args.Dockerfile.IndexOf("/", StringComparison.Ordinal) > -1 ? args.Dockerfile : $"{context}/{args.Dockerfile}"
-                : $"{context}/Dockerfile";
+            var dockerFile = !string.IsNullOrEmpty(args.Dockerfile)
+                ? args.Dockerfile.IndexOf("/", StringComparison.Ordinal) > -1 ? args.Dockerfile : Path.Combine(context, args.Dockerfile)
+                : Path.Combine(context, "Dockerfile");
 
             // Build and push locally (may have some requirements on your local environment, i.e. docker)
             // We use the bash `|| :` here because if there are concurrent builds the login command will fail since
             // we're already logged in. I couldn't find any graceful ways to make this login work
+            
             var command = new Command($"{name}-docker-build-and-push",
                 new CommandArgs
                 {
-                    Create = "(docker login -u $USERNAME -p $PASSWORD $ADDRESS || :) && " +
-                             "docker build -t $NAME $BUILD_ARGS $CONTEXT -f $DOCKERFILE && " +
-                             "docker push $NAME",
+                    //Dir = Directory.GetCurrentDirectory(),
+                    //Create = Output.Format($"(docker login -u $USERNAME -p $PASSWORD $SERVER || :) && docker build -f $DOCKERFILE -t $NAME $CONTEXT && docker image push $NAME"),
+                    //Create = Output.Format(@$"dotnet list"),
+                    //Create = Output.Format(@$"docker login -u {args.RegistryArgs.Username} -p {args.RegistryArgs.Password} {args.RegistryArgs.Server}"),
+                    //Create = Output.Format($"(docker login -u {args.RegistryArgs.Username} -p {args.RegistryArgs.Password} {args.RegistryArgs.Server} || :) && docker build -f {dockerFile} -t {Name} {context} && docker image push {Name}"),
+                    Create = "./dockerBuildPush.sh",
                     Environment = new InputMap<string>
                     {
-                        { "NAME", ImageName },
+                        { "NAME", Name },
                         { "BUILD_ARGS", buildArgs },
                         { "CONTEXT", context },
-                        { "ADDRESS", args.RegistryServer },
-                        { "USERNAME", args.RegistryUsername },
-                        { "PASSWORD", args.RegistryPassword },
+                        { "SERVER", args.RegistryArgs.Server },
+                        { "USERNAME", args.RegistryArgs.Username },
+                        { "PASSWORD", args.RegistryArgs.Password },
                         { "DOCKERFILE", dockerFile }
+                    },
+                    Triggers = new []
+                    {
+                        hash
                     }
                 }, new CustomResourceOptions
                 {
                     Parent = this,
-                    IgnoreChanges = new List<string>{"environment.USERNAME", "environment.PASSWORD"}
+                    IgnoreChanges = new List<string>{"environment.USERNAME", "environment.PASSWORD"},
+                    DeleteBeforeReplace = true
                 });
             
-            RegisterOutputs(new Dictionary<string, object>()
-            {
-                {"imageName", ImageName}
-            });
+            //StdOut = command.Stdout;
+            //StdErr = command.Stderr;
         }
-        static string GenerateHash(string context)
-        {
-            var allMd5Bytes = new List<byte>();
-            var excludedDirectories = new[] { "bin", "obj" };
-            var files = Directory.GetFiles(context, "*", SearchOption.AllDirectories);
-            foreach (var fileName in files)
-            {
-                using var md5 = MD5.Create();
-                var fileInfo = new FileInfo(fileName);
-                if (excludedDirectories.Any(excludedDirectory => fileInfo.Directory != null && fileInfo.Directory.Name == excludedDirectory))
-                    continue;
-                
-                using var stream = File.OpenRead(fileName);
-                var md5Bytes = md5.ComputeHash(stream);
-                
-                allMd5Bytes.AddRange(md5Bytes);
-            }
-
-            using var hash = MD5.Create();
-            var md5AllBytes = hash.ComputeHash(allMd5Bytes.ToArray());
-            var result = BytesToHash(md5AllBytes);
-            
-            return result;
-        }
-        static string BytesToHash(IEnumerable<byte> md5Bytes) => string.Join("", md5Bytes.Select(ba => ba.ToString("x2")));
     }
 
     public class CustomImageArgs
     {
         public string Context { get; set; }
         public string Dockerfile { get; set; }
-        public string RegistryServer { get; set; }
-        public string RegistryUsername { get; set; }
-        public string RegistryPassword { get; set; }
-        //public ImageBuilderArgs ImageBuilderArgs { get; set; }
-        public IDictionary<string, string> BuildArgs { get; set; }
+        public string BuildId { get; set; }
+        public CustomRegistryArgs RegistryArgs { get; set; }
+        public IDictionary<string, Output<string>> BuildArgs { get; set; } = new Dictionary<string, Output<string>>();
+    }
+
+    public class CustomRegistryArgs
+    {
+        public Input<string> Server { get; set; }
+        public Input<string> Username { get; set; }
+        public Input<string> Password { get; set; }
     }
 }

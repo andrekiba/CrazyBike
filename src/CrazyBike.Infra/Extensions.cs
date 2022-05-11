@@ -75,6 +75,14 @@ namespace CrazyBike.Infra
 
             return line;
         }
+
+        public static string ToWslFullPath(this string fullPath)
+        {
+            var split = fullPath.Split(":");
+            var drive = split[0].ToLower();
+            var path = split[1].Replace("\\", "/");
+            return $"/mnt/{drive}{path}";
+        }
     }
 
     public static class OperatingSystem
