@@ -126,13 +126,14 @@ namespace CrazyBike.Infra
             var buyBuildPushCommand = new Command("buy-build-and-push",
                 new CommandArgs
                 {
+                    Dir = Directory.GetCurrentDirectory(),
                     Create = azAcrBuildAndPush,
                     Environment = new InputMap<string>
                     {
                         { "IMAGENAME", BuyImageTag },
-                        { "CONTEXT", "./.." },
+                        { "CONTEXT", buildContext },
                         { "REGISTRY", containerRegistry.Name },
-                        { "DOCKERFILE", "./../Dockerfile.buy" }
+                        { "DOCKERFILE", Path.Combine(buildContext, "Dockerfile.buy") }
                     },
                     Triggers = new []
                     {
@@ -153,13 +154,14 @@ namespace CrazyBike.Infra
             var assemblerBuildPushCommand = new Command("assembler-build-and-push",
                 new CommandArgs
                 {
+                    Dir = Directory.GetCurrentDirectory(),
                     Create = azAcrBuildAndPush,
                     Environment = new InputMap<string>
                     {
                         { "IMAGENAME", AssemblerImageTag },
-                        { "CONTEXT", "./.." },
+                        { "CONTEXT", buildContext },
                         { "REGISTRY", containerRegistry.Name },
-                        { "DOCKERFILE", "./../Dockerfile.assembler" }
+                        { "DOCKERFILE", Path.Combine(buildContext, "Dockerfile.assembler") }
                     },
                     Triggers = new []
                     {
@@ -180,13 +182,14 @@ namespace CrazyBike.Infra
             var shipperBuildPushCommand = new Command("shipper-build-and-push",
                 new CommandArgs
                 {
+                    Dir = Directory.GetCurrentDirectory(),
                     Create = azAcrBuildAndPush,
                     Environment = new InputMap<string>
                     {
                         { "IMAGENAME", ShipperImageTag },
-                        { "CONTEXT", "./.." },
+                        { "CONTEXT", buildContext },
                         { "REGISTRY", containerRegistry.Name },
-                        { "DOCKERFILE", "./../Dockerfile.shipper" }
+                        { "DOCKERFILE", Path.Combine(buildContext, "Dockerfile.shipper") }
                     },
                     Triggers = new []
                     {
