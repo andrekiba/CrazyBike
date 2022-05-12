@@ -1,7 +1,5 @@
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using Pulumi;
 using Pulumi.AzureNative.App.Inputs;
@@ -10,12 +8,12 @@ using Pulumi.AzureNative.ContainerRegistry.Inputs;
 using Pulumi.AzureNative.OperationalInsights;
 using Pulumi.AzureNative.OperationalInsights.Inputs;
 using Pulumi.AzureNative.Resources;
-using Pulumi.Docker;
-using Pulumi.Docker.Inputs;
+using Pulumi.Command.Local;
 using Deployment = Pulumi.Deployment;
 using ASB = Pulumi.AzureNative.ServiceBus;
 using App = Pulumi.AzureNative.App;
 using ACR = Pulumi.AzureNative.ContainerRegistry;
+using Resource = Pulumi.Resource;
 
 namespace CrazyBike.Infra
 {
@@ -24,12 +22,13 @@ namespace CrazyBike.Infra
         #region Output
         [Output] public Output<string> ASBPrimaryConnectionString { get; set; }
         [Output] public Output<string> BuyUrl { get; set; }
-        [Output] public Output<string> BuyImageName { get; set; }
-        [Output] public Output<string> AssemblerImageName { get; set; }
-        [Output] public Output<string> ShipperImageName { get; set; }
-        [Output] public Output<string> StdOut {get; set;}
-        [Output] public Output<string> StdErr {get; set;}
-        
+        [Output] public Output<string> BuyImageTag { get; set; }
+        [Output] public Output<string> AssemblerImageTag { get; set; }
+        [Output] public Output<string> ShipperImageTag { get; set; }
+        [Output] public Output<string> BuyBuildOutput {get; set;}
+        [Output] public Output<string> AssemblerBuildOutput {get; set;}
+        [Output] public Output<string> ShipperBuildOutput {get; set;}
+
         #endregion
         
         public CrazyBikeStack()
@@ -115,250 +114,94 @@ namespace CrazyBike.Infra
             
             #endregion
             
-            #region Docker images
+            #region ACR commands
             
-            var dockerProvider = new Provider("azure_acr", new ProviderArgs
-            {
-               Host = OperatingSystem.IsWindows() ? "npipe:////.//pipe//docker_engine" : default,
-               RegistryAuth = new ProviderRegistryAuthArgs
-               {
-                   Address = containerRegistry.LoginServer,
-                   Username = adminUsername,
-                   Password = adminPassword
-               }
-            });
-
+            const string azAcrBuildAndPush = "az acr build -r $REGISTRY -t $IMAGENAME -f $DOCKERFILE $CONTEXT";
             var buildContext = Path.GetFullPath(Directory.GetParent(Directory.GetCurrentDirectory()).FullName);
             
             var buyContext = Path.Combine(buildContext,"CrazyBike.Buy");
             var buyImageName = $"{projectName}-buy";
             var buyContextHash = buyContext.GenerateHash();
-            /*
-            var buyImage = new RegistryImage(buyImageName, new RegistryImageArgs
-            {
-                Name = Output.Format($"{containerRegistry.LoginServer}/{buyImageName}:latest-{buyContextHash}"),
-                Build = new RegistryImageBuildArgs
+            BuyImageTag = Output.Format($"{containerRegistry.LoginServer}/{buyImageName}:latest-{buyContextHash}");
+            var buyBuildPushCommand = new Command("buy-build-and-push",
+                new CommandArgs
                 {
-                    Dockerfile = "Dockerfile.buy",
-                    Context = buildContext,
-                    BuildId = buyContextHash
-                }
-            }, new CustomResourceOptions
-            {
-                Provider = dockerProvider
-            });
-            */
-            var buyImage = new CustomImage(buyImageName, new CustomImageArgs
-            {
-                Context = buildContext,
-                Dockerfile = "Dockerfile.buy",
-                BuildId = buyContextHash,
-                RegistryArgs = new CustomRegistryArgs
+                    Dir = Directory.GetCurrentDirectory(),
+                    Create = azAcrBuildAndPush,
+                    Environment = new InputMap<string>
+                    {
+                        { "IMAGENAME", BuyImageTag },
+                        { "CONTEXT", buildContext },
+                        { "REGISTRY", containerRegistry.Name },
+                        { "DOCKERFILE", Path.Combine(buildContext, "Dockerfile.buy") }
+                    },
+                    Triggers = new []
+                    {
+                        BuyImageTag
+                    }
+                },
+                new CustomResourceOptions
                 {
-                    Server = containerRegistry.LoginServer,
-                    Username = adminUsername,
-                    Password = adminPassword
-                }
-            });
-            BuyImageName = buyImage.Name;
-
+                    Parent = this,
+                    DeleteBeforeReplace = true
+                });
+            BuyBuildOutput = buyBuildPushCommand.Stdout;
+            
             var assemblerContext = Path.Combine(buildContext,"CrazyBike.Assembler");
             var assemblerImageName = $"{projectName}-assembler";
             var assemblerContextHash = assemblerContext.GenerateHash();
-            /*
-            var assemblerImage = new RegistryImage(assemblerImageName, new RegistryImageArgs
-            {
-                Name = Output.Format($"{containerRegistry.LoginServer}/{assemblerImageName}:latest-{assemblerContextHash}"),
-                Build = new RegistryImageBuildArgs
+            AssemblerImageTag = Output.Format($"{containerRegistry.LoginServer}/{assemblerImageName}:latest-{assemblerContextHash}");
+            var assemblerBuildPushCommand = new Command("assembler-build-and-push",
+                new CommandArgs
                 {
-                    Dockerfile = "Dockerfile.assembler",
-                    Context = buildContext,
-                    BuildId = assemblerContextHash
-                }
-            }, new CustomResourceOptions
-            {
-                Provider = dockerProvider
-            });
-            */
-            var assemblerImage = new CustomImage(assemblerImageName, new CustomImageArgs
-            {
-                Context = buildContext,
-                Dockerfile = "Dockerfile.assembler",
-                BuildId = assemblerContextHash,
-                RegistryArgs = new CustomRegistryArgs
+                    Dir = Directory.GetCurrentDirectory(),
+                    Create = azAcrBuildAndPush,
+                    Environment = new InputMap<string>
+                    {
+                        { "IMAGENAME", AssemblerImageTag },
+                        { "CONTEXT", buildContext },
+                        { "REGISTRY", containerRegistry.Name },
+                        { "DOCKERFILE", Path.Combine(buildContext, "Dockerfile.assembler") }
+                    },
+                    Triggers = new []
+                    {
+                        AssemblerImageTag
+                    }
+                }, 
+                new CustomResourceOptions
                 {
-                    Server = containerRegistry.LoginServer,
-                    Username = adminUsername,
-                    Password = adminPassword
-                }
-            });
-            AssemblerImageName = assemblerImage.Name;
+                    Parent = this,
+                    DeleteBeforeReplace = true
+                });
+            AssemblerBuildOutput = assemblerBuildPushCommand.Stdout;
             
             var shipperContext = Path.Combine(buildContext,"CrazyBike.Shipper");
             var shipperImageName = $"{projectName}-shipper";
             var shipperContextHash = shipperContext.GenerateHash();
-            /*
-            var shipperImage = new RegistryImage(shipperImageName, new RegistryImageArgs
-            {
-                Name = Output.Format($"{containerRegistry.LoginServer}/{shipperImageName}:latest-{shipperContextHash}"),
-                Build = new RegistryImageBuildArgs
+            ShipperImageTag = Output.Format($"{containerRegistry.LoginServer}/{shipperImageName}:latest-{shipperContextHash}");
+            var shipperBuildPushCommand = new Command("shipper-build-and-push",
+                new CommandArgs
                 {
-                    Dockerfile = "Dockerfile.shipper",
-                    Context = buildContext,
-                    BuildId = shipperContextHash
-                }
-            }, new CustomResourceOptions
-            {
-                Provider = dockerProvider
-            });
-            */
-            var shipperImage = new CustomImage(shipperImageName, new CustomImageArgs
-            {
-                Context = buildContext,
-                Dockerfile = "Dockerfile.shipper",
-                BuildId = shipperContextHash,
-                RegistryArgs = new CustomRegistryArgs
-                {
-                    Server = containerRegistry.LoginServer,
-                    Username = adminUsername,
-                    Password = adminPassword
-                }
-            });
-            ShipperImageName = shipperImage.Name;
-            
-            /*
-            var buyContext = $"{buildContext}/CrazyBike.Buy";
-            var buyContextHash = GenerateHash(buyContext);
-            var buyImageName = $"{projectName}-buy";
-            var buyImage = new Image(buyImageName, new ImageArgs
-            {
-                ImageName = Output.Format($"{containerRegistry.LoginServer}/{buyImageName}:latest-{buyContextHash}"),
-                Build = new DockerBuild
-                {
-                    Dockerfile = $"{buyContext}/Dockerfile",
-                    Context = buildContext
-                },
-                Registry = new ImageRegistry
-                {
-                    Server = containerRegistry.LoginServer,
-                    Username = adminUsername,
-                    Password = adminPassword
-                }
-            });
-            BuyImageName = buyImage.ImageName;
-            
-            var assemblerContext = $"{buildContext}/CrazyBike.Assembler";
-            var assemblerContextHash = GenerateHash(assemblerContext);
-            var assemblerImageName = $"{projectName}-assembler";
-            var assemblerImage = new Image(assemblerImageName, new ImageArgs
-            {
-                ImageName = Output.Format($"{containerRegistry.LoginServer}/{assemblerImageName}:latest-{assemblerContextHash}"),
-                Build = new DockerBuild
-                {
-                    Dockerfile = $"{assemblerContext}/Dockerfile",
-                    Context = buildContext
-                },
-                Registry = new ImageRegistry
-                {
-                    Server = containerRegistry.LoginServer,
-                    Username = adminUsername,
-                    Password = adminPassword
-                }
-            });
-            AssemblerImageName = assemblerImage.ImageName;
-            
-            var shipperContext = $"{buildContext}/CrazyBike.Shipper";
-            var shipperContextHash = GenerateHash(shipperContext);
-            var shipperImageName = $"{projectName}-shipper";
-            var shipperImage = new Image(shipperImageName, new ImageArgs
-            {
-                ImageName = Output.Format($"{containerRegistry.LoginServer}/{shipperImageName}:latest-{shipperContextHash}"),
-                Build = new DockerBuild
-                {
-                    Dockerfile = $"{shipperContext}/Dockerfile",
-                    Context = buildContext
-                },
-                Registry = new ImageRegistry
-                {
-                    Server = containerRegistry.LoginServer,
-                    Username = adminUsername,
-                    Password = adminPassword
-                }
-            });
-            ShipperImageName = shipperImage.ImageName;
-            */
-            #endregion
-            
-            #region ACR tasks
-            
-            var adosConfig = new Pulumi.Config("ados");
-            var adosPat = adosConfig.RequireSecret("pat");
-            
-            var githubConfig = new Pulumi.Config("github");
-            var githubPat = githubConfig.RequireSecret("pat");
-            var githubRepoUrl = githubConfig.Require("repoUrl");
-            
-            const string assemblerBuildTaskName = "assembler-build-task";
-            var assemblerBuildTask = new ACR.Task(assemblerBuildTaskName, new TaskArgs
-            {
-                TaskName = assemblerBuildTaskName,
-                RegistryName = containerRegistry.Name,
-                ResourceGroupName = resourceGroup.Name,
-                Status = ACR.TaskStatus.Enabled,
-                IsSystemTask = false,
-                //LogTemplate = "acr/tasks:{{.Run.OS}}",
-                AgentConfiguration = new AgentPropertiesArgs
-                {
-                    Cpu = 2
-                },
-                Identity = new IdentityPropertiesArgs
-                {
-                    Type = ACR.ResourceIdentityType.SystemAssigned
-                },
-                Platform = new PlatformPropertiesArgs
-                {
-                    Architecture = "amd64",
-                    Os = "Linux"
-                },
-                Step = new DockerBuildStepArgs
-                {
-                    ContextPath = "./..",
-                    DockerFilePath = "./../Dockerfile.assembler",
-                    ImageNames = 
+                    Dir = Directory.GetCurrentDirectory(),
+                    Create = azAcrBuildAndPush,
+                    Environment = new InputMap<string>
                     {
-                        $"{assemblerImageName}:latest"
+                        { "IMAGENAME", ShipperImageTag },
+                        { "CONTEXT", buildContext },
+                        { "REGISTRY", containerRegistry.Name },
+                        { "DOCKERFILE", Path.Combine(buildContext, "Dockerfile.shipper") }
                     },
-                    IsPushEnabled = true,
-                    NoCache = false,
-                    Type = "Docker"
-                },
-                Trigger = new TriggerPropertiesArgs
-                {
-                    SourceTriggers = 
+                    Triggers = new []
                     {
-                        new SourceTriggerArgs
-                        {
-                            Name = "githubSourceTrigger",
-                            Status = TriggerStatus.Enabled,
-                            SourceRepository = new SourcePropertiesArgs
-                            {
-                                Branch = stackName,
-                                RepositoryUrl = githubRepoUrl,
-                                SourceControlAuthProperties = new AuthInfoArgs
-                                {
-                                    Token = githubPat,
-                                    TokenType = "PAT"
-                                },
-                                SourceControlType = "Github"
-                            },
-                            SourceTriggerEvents = 
-                            {
-                                "commit"
-                            }
-                        }
+                        ShipperImageTag
                     }
-                }
-            });
+                }, 
+                new CustomResourceOptions
+                {
+                    Parent = this,
+                    DeleteBeforeReplace = true
+                });
+            ShipperBuildOutput = shipperBuildPushCommand.Stdout;
             
             #endregion
 
@@ -425,7 +268,7 @@ namespace CrazyBike.Infra
                         new App.Inputs.ContainerArgs
                         {
                             Name = buyImageName,
-                            Image = buyImage.Name,
+                            Image = BuyImageTag,
                             Env = new[]
                             {
                                 new EnvironmentVarArgs
@@ -458,7 +301,8 @@ namespace CrazyBike.Infra
                 }
             }, new CustomResourceOptions
             {
-                IgnoreChanges = new List<string> {"tags"}
+                IgnoreChanges = new List<string> {"tags"},
+                DependsOn = new InputList<Resource>{ buyBuildPushCommand }
             });
             BuyUrl = Output.Format($"https://{buy.Configuration.Apply(c => c.Ingress).Apply(i => i.Fqdn)}");
             
@@ -500,7 +344,7 @@ namespace CrazyBike.Infra
                         new App.Inputs.ContainerArgs
                         {
                             Name = assemblerImageName,
-                            Image = assemblerImage.Name,
+                            Image = AssemblerImageTag,
                             Env = new[]
                             {
                                 new EnvironmentVarArgs
@@ -540,7 +384,8 @@ namespace CrazyBike.Infra
                 }
             }, new CustomResourceOptions
             {
-                IgnoreChanges = new List<string> {"tags"}
+                IgnoreChanges = new List<string> {"tags"},
+                DependsOn = new InputList<Resource>{ assemblerBuildPushCommand }
             });
             
             var shipperName = $"{projectName}-{stackName}-ca-shipper";
@@ -581,7 +426,7 @@ namespace CrazyBike.Infra
                         new App.Inputs.ContainerArgs
                         {
                             Name = shipperImageName,
-                            Image = shipperImage.Name,
+                            Image = ShipperImageTag,
                             Env = new[]
                             {
                                 new EnvironmentVarArgs
@@ -621,7 +466,8 @@ namespace CrazyBike.Infra
                 }
             }, new CustomResourceOptions
             {
-                IgnoreChanges = new List<string> {"tags"}
+                IgnoreChanges = new List<string> {"tags"},
+                DependsOn = new InputList<Resource>{ shipperBuildPushCommand }
             });
             
             #endregion
