@@ -18,7 +18,6 @@ services:
       dockerfile: Dockerfile.assembler
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - FakeWorkDuration=00:02:00
       - ASBConnectionString=<asb-connection-string>
   crazy.bike.shipper:
     image: andrekiba/crazy-bike-shipper:v1

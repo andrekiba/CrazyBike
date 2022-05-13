@@ -52,7 +52,7 @@ public class ShipperWorker : BackgroundService
             await processor.StartProcessingAsync(stoppingToken);
             while (!stoppingToken.IsCancellationRequested)
             {
-                logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
+                //logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
                 await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
             }
             await processor.StopProcessingAsync(stoppingToken);
@@ -80,7 +80,7 @@ public class ShipperWorker : BackgroundService
         var shipBikeMessage = JsonSerializer.Deserialize<ShipBikeMessage>(rawMessageBody);
         if (shipBikeMessage != null)
         {
-            await Task.Delay(TimeSpan.FromSeconds(random.Next(1,5)));
+            await Task.Delay(TimeSpan.FromSeconds(random.Next(1,10)));
             logger.LogInformation($"Bike {shipBikeMessage.Id} shipped to {shipBikeMessage.Address}!");
         }
         else

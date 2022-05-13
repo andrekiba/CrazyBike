@@ -18,6 +18,7 @@ namespace CrazyBike.Assembler
         readonly ServiceBusSender sender;
         readonly ILogger<AssemblerWorker> logger;
         readonly Faker faker = new();
+        readonly Random random = new();
         
         const string AssemblerQueueName = "crazybike-assembler";
         const string ShipperQueueName = "crazybike-shipper";
@@ -58,7 +59,7 @@ namespace CrazyBike.Assembler
                 await processor.StartProcessingAsync(stoppingToken);
                 while (!stoppingToken.IsCancellationRequested)
                 {
-                    logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
+                    //logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
                     await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
                 }
                 await processor.StopProcessingAsync(stoppingToken);
@@ -87,7 +88,7 @@ namespace CrazyBike.Assembler
             var assembleBikeMessage = JsonSerializer.Deserialize<AssembleBikeMessage>(rawMessageBody);
             if (assembleBikeMessage != null)
             {
-                await Task.Delay(TimeSpan.Parse(configuration.GetValue<string>("FakeWorkDuration")));
+                await Task.Delay(TimeSpan.FromSeconds(random.Next(1,10)));
 
                 var shipBikeMessage = new ShipBikeMessage(assembleBikeMessage.Id, faker.Address.FullAddress());
                 var rowShipBikeMessage = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(shipBikeMessage));
