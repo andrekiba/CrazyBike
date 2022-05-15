@@ -2,7 +2,7 @@ version: '3.4'
 
 services:
   crazy-bike.buy:
-    image: andrekiba/crazy-bike-buy:v1
+    image: crazybikemaincr.azurecr.io/crazybike-buy:latest-9ee003eeffe7cd25bf57301f6c733099
     build:
       context: .
       dockerfile: Dockerfile.buy
@@ -12,7 +12,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASBConnectionString=<asb-connection-string>
   crazy.bike.assembler:
-    image:  andrekiba/crazy-bike-assembler:v1
+    image:  crazybikemaincr.azurecr.io/crazybike-assembler:latest-c71167105522103fcf8e499975927b37
     build:
       context: .
       dockerfile: Dockerfile.assembler
@@ -20,7 +20,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASBConnectionString=<asb-connection-string>
   crazy.bike.shipper:
-    image: andrekiba/crazy-bike-shipper:v1
+    image: crazybikemaincr.azurecr.io/crazybike-shipper:latest-cf146849c5762fb794d0ca4b4015a1b1
     build:
       context: .
       dockerfile: Dockerfile.shipper
