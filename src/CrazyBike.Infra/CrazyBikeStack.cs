@@ -41,13 +41,15 @@ namespace CrazyBike.Infra
         
         public CrazyBikeStack()
         {
-            
+
+#if DEBUG
+            /*
             while (!Debugger.IsAttached)
             {
                 Thread.Sleep(100);
             }
-            
-            
+            */
+#endif            
             const string projectName = "crazybike";
             var stackName = Deployment.Instance.StackName;
             
