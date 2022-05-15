@@ -41,12 +41,12 @@ namespace CrazyBike.Infra
         
         public CrazyBikeStack()
         {
-            /*
+            
             while (!Debugger.IsAttached)
             {
                 Thread.Sleep(100);
             }
-            */
+            
             
             const string projectName = "crazybike";
             var stackName = Deployment.Instance.StackName;
@@ -97,12 +97,11 @@ namespace CrazyBike.Infra
 
             var buildContextBlob = new Storage.Blob(buildContextTarName, new Storage.BlobArgs
             {
-                //BlobName = buildContextTarName,
                 AccountName = storageAccount.Name,
                 ContainerName = dockerContainer.Name,
                 ResourceGroupName = resourceGroup.Name,
                 Type = Storage.BlobType.Block,
-                Source = new FileAsset(buildContextTar),
+                Source = new FileAsset(buildContextTar)
             }, new CustomResourceOptions
             {
                 //DeleteBeforeReplace = true

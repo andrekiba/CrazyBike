@@ -118,11 +118,6 @@ namespace CrazyBike.Infra
             IReadOnlyCollection<string> excludedDirectories,
             IReadOnlyCollection<string> excludedFiles)
         {
-            // Optionally, write an entry for the directory itself.
-            // Specify false for recursion here if we will add the directory's files individually.
-            //var tarEntry = TarEntry.CreateEntryFromFile(sourceDirectory);
-            //tarArchive.WriteEntry(tarEntry, false);
-            
             var files = Directory.GetFiles(sourceDirectory);
             foreach (var file in files)
             {
@@ -130,9 +125,8 @@ namespace CrazyBike.Infra
                     continue;
                 
                 var entryName = file.Split(Path.Join(relativeDirectoryContext, OperatingSystem.IsWindows() ? "\\" : "/"))[1];
-                
                 var tarEntry = TarEntry.CreateEntryFromFile(file);
-                tarEntry.Name = entryName;
+                tarEntry.Name = entryName.Replace("\\", "/");
                 tarArchive.WriteEntry(tarEntry, false);
             }
 
@@ -145,6 +139,9 @@ namespace CrazyBike.Infra
                 var dirs = directory.Split('/', '\\');
                 if(dirs.Intersect(excludedDirectories, StringComparer.OrdinalIgnoreCase).Any())
                     continue;
+                    
+                //var dirEntry = TarEntry.CreateEntryFromFile(sourceDirectory);
+                //tarArchive.WriteEntry(dirEntry, false);
                
                 AddDirectoryToTar(tarArchive, directory, true, relativeDirectoryContext, excludedDirectories, excludedFiles);    
             }
