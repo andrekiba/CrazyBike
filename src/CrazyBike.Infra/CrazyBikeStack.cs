@@ -1,6 +1,9 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Threading.Tasks;
+using ICSharpCode.SharpZipLib.GZip;
+using ICSharpCode.SharpZipLib.Tar;
 using Pulumi;
 using Pulumi.AzureNative.App.Inputs;
 using Pulumi.AzureNative.ContainerRegistry;
@@ -14,6 +17,7 @@ using ASB = Pulumi.AzureNative.ServiceBus;
 using App = Pulumi.AzureNative.App;
 using ACR = Pulumi.AzureNative.ContainerRegistry;
 using Resource = Pulumi.Resource;
+using Storage = Pulumi.AzureNative.Storage;
 
 namespace CrazyBike.Infra
 {
@@ -28,6 +32,7 @@ namespace CrazyBike.Infra
         [Output] public Output<string> BuyBuildOutput {get; set;}
         [Output] public Output<string> AssemblerBuildOutput {get; set;}
         [Output] public Output<string> ShipperBuildOutput {get; set;}
+        [Output] public Output<string> BuildContextBlobUrl {get; set;}
 
         #endregion
         
@@ -52,6 +57,52 @@ namespace CrazyBike.Infra
             });
 
             #endregion
+            
+            #region Azure Storage
+
+            var storageAccountName = $"{projectName}{stackName}st";
+            var storageAccount = new Storage.StorageAccount(storageAccountName, new Storage.StorageAccountArgs
+            {
+                AccountName = storageAccountName,
+                ResourceGroupName = resourceGroup.Name,
+                Sku = new Storage.Inputs.SkuArgs
+                {
+                    Name = Storage.SkuName.Standard_LRS
+                },
+                Kind = Storage.Kind.StorageV2
+            });
+            
+            const string dockerContainerName = "docker-build-archives";
+            var dockerContainer = new Storage.BlobContainer(dockerContainerName, new Storage.BlobContainerArgs
+            {
+                ContainerName = dockerContainerName,
+                AccountName = storageAccount.Name,
+                ResourceGroupName = resourceGroup.Name,
+                PublicAccess = Storage.PublicAccess.None,
+            });
+            
+            #endregion
+            
+            #region Docker build context
+            
+            var buildContext = Path.GetFullPath(Directory.GetParent(Directory.GetCurrentDirectory()).FullName);
+            var buildContextTar = buildContext.DirToTar(Path.Combine(Path.GetTempPath(),"crazybike-build-context.tar.gz"));
+            
+            var buildContextBlob = new Storage.Blob("crazybike-build-context.tar.gz", new Storage.BlobArgs
+            {
+                //BlobName = "crazybike-build-context.tar",
+                AccountName = storageAccount.Name,
+                ContainerName = dockerContainer.Name,
+                ResourceGroupName = resourceGroup.Name,
+                Type = Storage.BlobType.Block,
+                Source = new FileArchive(buildContextTar)
+            }, new CustomResourceOptions
+            {
+                DeleteBeforeReplace = true
+            });
+            BuildContextBlobUrl = SignedBlobReadUrl(buildContextBlob, dockerContainer, storageAccount, resourceGroup);
+            
+            #endregion 
             
             #region ASB
             
@@ -117,12 +168,12 @@ namespace CrazyBike.Infra
             #region ACR commands
             
             const string azAcrBuildAndPush = "az acr build -r $REGISTRY -t $IMAGENAME -f $DOCKERFILE $CONTEXT";
-            var buildContext = Path.GetFullPath(Directory.GetParent(Directory.GetCurrentDirectory()).FullName);
             
             var buyContext = Path.Combine(buildContext,"CrazyBike.Buy");
             var buyImageName = $"{projectName}-buy";
             var buyContextHash = buyContext.GenerateHash();
             BuyImageTag = Output.Format($"{containerRegistry.LoginServer}/{buyImageName}:latest-{buyContextHash}");
+            /*
             var buyBuildPushCommand = new Command("buy-build-and-push",
                 new CommandArgs
                 {
@@ -146,6 +197,7 @@ namespace CrazyBike.Infra
                     DeleteBeforeReplace = true
                 });
             BuyBuildOutput = buyBuildPushCommand.Stdout;
+            */
             
             var assemblerContext = Path.Combine(buildContext,"CrazyBike.Assembler");
             var assemblerImageName = $"{projectName}-assembler";
@@ -204,6 +256,37 @@ namespace CrazyBike.Infra
             ShipperBuildOutput = shipperBuildPushCommand.Stdout;
             
             #endregion
+            
+            #region ACR tasks
+            
+            const string buyBuildTaskRunName = "buy-build-task-run";
+            var buyBuildTaskRun = new TaskRun(buyBuildTaskRunName, new TaskRunArgs
+            {
+                TaskRunName = buyBuildTaskRunName,
+                RegistryName = containerRegistry.Name,
+                ResourceGroupName = resourceGroup.Name,
+                ForceUpdateTag = BuyImageTag,
+                RunRequest = new DockerBuildRequestArgs
+                {
+                    SourceLocation = BuildContextBlobUrl,
+                    DockerFilePath = "Dockerfile.buy",
+                    ImageNames = 
+                    {
+                        BuyImageTag
+                    },
+                    IsPushEnabled = true,
+                    IsArchiveEnabled = true,
+                    NoCache = false,
+                    Type = "Docker",
+                    Platform = new PlatformPropertiesArgs
+                    {
+                        Architecture = "amd64",
+                        Os = "Linux"
+                    }
+                }
+            });
+            
+            #endregion 
 
             #region Container Apps
 
@@ -302,7 +385,7 @@ namespace CrazyBike.Infra
             }, new CustomResourceOptions
             {
                 IgnoreChanges = new List<string> {"tags"},
-                DependsOn = new InputList<Resource>{ buyBuildPushCommand }
+                DependsOn = new InputList<Resource>{ buyBuildTaskRun }
             });
             BuyUrl = Output.Format($"https://{buy.Configuration.Apply(c => c.Ingress).Apply(i => i.Fqdn)}");
             
@@ -482,6 +565,27 @@ namespace CrazyBike.Infra
                 ResourceGroupName = resourceGroupName
             });
             return result.PrimaryConnectionString;
+        }
+        
+        static Output<string> SignedBlobReadUrl(Storage.Blob blob, Storage.BlobContainer container, Storage.StorageAccount account, ResourceGroup resourceGroup)
+        {
+            var serviceSasToken = Storage.ListStorageAccountServiceSAS.Invoke(new Storage.ListStorageAccountServiceSASInvokeArgs
+            {
+                AccountName = account.Name,
+                Protocols = Storage.HttpProtocol.Https,
+                SharedAccessStartTime = "2022-05-01",
+                SharedAccessExpiryTime = "2022-12-31",
+                Resource = Storage.SignedResource.C,
+                ResourceGroupName = resourceGroup.Name,
+                Permissions = Storage.Permissions.R,
+                CanonicalizedResource = Output.Format($"/blob/{account.Name}/{container.Name}"),
+                ContentType = "application/json",
+                CacheControl = "max-age=5",
+                ContentDisposition = "inline",
+                ContentEncoding = "deflate",
+            }).Apply(blobSAS => blobSAS.ServiceSasToken);
+
+            return Output.Format($"https://{account.Name}.blob.core.windows.net/{container.Name}/{blob.Name}?{serviceSasToken}");
         }
     }
 }
