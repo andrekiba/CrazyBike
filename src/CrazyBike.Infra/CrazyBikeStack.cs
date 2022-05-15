@@ -166,7 +166,8 @@ namespace CrazyBike.Infra
                 ContainerName = dockerContainer.Name,
                 ResourceGroupName = resourceGroup.Name,
                 Type = Storage.BlobType.Block,
-                Source = new FileAsset(buildContextTar)
+                Source = new FileAsset(buildContextTar),
+                //ContentMd5 = buildContextTar.CalculateMD5()
             }, new CustomResourceOptions
             {
                 //DeleteBeforeReplace = true
@@ -455,7 +456,7 @@ namespace CrazyBike.Infra
                 IgnoreChanges = new List<string> {"tags"},
                 DependsOn = new InputList<Resource>{ buyBuildTaskRun }
             });
-            BuyUrl = Output.Format($"https://{buy.Configuration.Apply(c => c.Ingress).Apply(i => i.Fqdn)}");
+            BuyUrl = Output.Format($"https://{buy.Configuration.Apply(c => c.Ingress).Apply(i => i.Fqdn)}/swagger");
             
             var assemblerName = $"{projectName}-{stackName}-ca-assembler";
             var assembler = new App.ContainerApp(assemblerName, new App.ContainerAppArgs

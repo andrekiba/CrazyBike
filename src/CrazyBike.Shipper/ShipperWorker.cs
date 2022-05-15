@@ -75,19 +75,19 @@ public class ShipperWorker : BackgroundService
     {
         var message = args.Message;
         var rawMessageBody = Encoding.UTF8.GetString(message.Body);
-        logger.LogInformation("Received message {MessageId} with body {MessageBody}", message.MessageId, rawMessageBody);
+        logger.LogWarning("Received message {MessageId} with body {MessageBody}", message.MessageId, rawMessageBody);
 
         var shipBikeMessage = JsonSerializer.Deserialize<ShipBikeMessage>(rawMessageBody);
         if (shipBikeMessage != null)
         {
             await Task.Delay(TimeSpan.FromSeconds(random.Next(1,10)));
-            logger.LogInformation($"Bike {shipBikeMessage.Id} shipped to {shipBikeMessage.Address}!");
+            logger.LogWarning($"Bike {shipBikeMessage.Id} shipped to {shipBikeMessage.Address}!");
         }
         else
             logger.LogError("Unable to deserialize to message contract {ContractName} for message {MessageBody}", typeof(ShipBikeMessage), rawMessageBody);
         
         await args.CompleteMessageAsync(message);
-        logger.LogInformation("Message {MessageId} processed", message.MessageId);
+        logger.LogWarning("Message {MessageId} processed", message.MessageId);
     }
     
     Task HandleError(ProcessErrorEventArgs args)

@@ -87,6 +87,14 @@ namespace CrazyBike.Infra
             return $"/mnt/{drive}{path}";
         }
         
+        public static string CalculateMD5(this string file)
+        {
+            using var md5 = MD5.Create();
+            using var stream = File.OpenRead(file);
+            var hash = md5.ComputeHash(stream);
+            return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+        }
+        
         public static string TarDirectory(this string sourceDirectory, string destinationArchiveFilePath,
             IReadOnlyCollection<string> excludedDirectories = default,
             IReadOnlyCollection<string> excludedFiles = default)

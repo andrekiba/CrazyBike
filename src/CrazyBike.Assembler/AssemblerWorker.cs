@@ -83,7 +83,7 @@ namespace CrazyBike.Assembler
         {
             var message = args.Message;
             var rawMessageBody = Encoding.UTF8.GetString(message.Body);
-            logger.LogInformation("Received message {MessageId} with body {MessageBody}", message.MessageId, rawMessageBody);
+            logger.LogWarning("Received message {MessageId} with body {MessageBody}", message.MessageId, rawMessageBody);
 
             var assembleBikeMessage = JsonSerializer.Deserialize<AssembleBikeMessage>(rawMessageBody);
             if (assembleBikeMessage != null)
@@ -108,7 +108,7 @@ namespace CrazyBike.Assembler
                 logger.LogError("Unable to deserialize to message contract {ContractName} for message {MessageBody}", typeof(AssembleBikeMessage), rawMessageBody);
             
             await args.CompleteMessageAsync(message);
-            logger.LogInformation("Message {MessageId} processed", message.MessageId);
+            logger.LogWarning("Message {MessageId} processed", message.MessageId);
         }
         
         Task HandleError(ProcessErrorEventArgs args)
