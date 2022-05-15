@@ -1,6 +1,9 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using ICSharpCode.SharpZipLib.GZip;
 using ICSharpCode.SharpZipLib.Tar;
@@ -86,20 +89,25 @@ namespace CrazyBike.Infra
             #region Docker build context
             
             var buildContext = Path.GetFullPath(Directory.GetParent(Directory.GetCurrentDirectory()).FullName);
-            var buildContextTar = buildContext.DirToTar(Path.Combine(Path.GetTempPath(),"crazybike-build-context.tar.gz"));
-            
-            var buildContextBlob = new Storage.Blob("crazybike-build-context.tar.gz", new Storage.BlobArgs
+
+            const string buildContextTarName = "crazybike-build-context.tar.gz";
+            var buildContextTar = buildContext.TarDirectory(Path.Combine(Path.GetTempPath(), buildContextTarName),
+                new List<string> { "bin", "obj", ".idea", nameof(CrazyBike.Infra) },
+                new List<string> {".DS_Store", "appsettings.secret.json", "appsettings.development.json", ".override.yml"});
+
+            var buildContextBlob = new Storage.Blob(buildContextTarName, new Storage.BlobArgs
             {
-                //BlobName = "crazybike-build-context.tar",
+                //BlobName = buildContextTarName,
                 AccountName = storageAccount.Name,
                 ContainerName = dockerContainer.Name,
                 ResourceGroupName = resourceGroup.Name,
                 Type = Storage.BlobType.Block,
-                Source = new FileArchive(buildContextTar)
+                Source = new FileAsset(buildContextTar),
             }, new CustomResourceOptions
             {
-                DeleteBeforeReplace = true
+                //DeleteBeforeReplace = true
             });
+            
             BuildContextBlobUrl = SignedBlobReadUrl(buildContextBlob, dockerContainer, storageAccount, resourceGroup);
             
             #endregion 
@@ -173,6 +181,7 @@ namespace CrazyBike.Infra
             var buyImageName = $"{projectName}-buy";
             var buyContextHash = buyContext.GenerateHash();
             BuyImageTag = Output.Format($"{containerRegistry.LoginServer}/{buyImageName}:latest-{buyContextHash}");
+            
             /*
             var buyBuildPushCommand = new Command("buy-build-and-push",
                 new CommandArgs
@@ -203,6 +212,8 @@ namespace CrazyBike.Infra
             var assemblerImageName = $"{projectName}-assembler";
             var assemblerContextHash = assemblerContext.GenerateHash();
             AssemblerImageTag = Output.Format($"{containerRegistry.LoginServer}/{assemblerImageName}:latest-{assemblerContextHash}");
+            
+            /*
             var assemblerBuildPushCommand = new Command("assembler-build-and-push",
                 new CommandArgs
                 {
@@ -226,11 +237,14 @@ namespace CrazyBike.Infra
                     DeleteBeforeReplace = true
                 });
             AssemblerBuildOutput = assemblerBuildPushCommand.Stdout;
+            */
             
             var shipperContext = Path.Combine(buildContext,"CrazyBike.Shipper");
             var shipperImageName = $"{projectName}-shipper";
             var shipperContextHash = shipperContext.GenerateHash();
             ShipperImageTag = Output.Format($"{containerRegistry.LoginServer}/{shipperImageName}:latest-{shipperContextHash}");
+            
+            /*
             var shipperBuildPushCommand = new Command("shipper-build-and-push",
                 new CommandArgs
                 {
@@ -254,6 +268,7 @@ namespace CrazyBike.Infra
                     DeleteBeforeReplace = true
                 });
             ShipperBuildOutput = shipperBuildPushCommand.Stdout;
+            */
             
             #endregion
             
@@ -277,7 +292,61 @@ namespace CrazyBike.Infra
                     IsPushEnabled = true,
                     IsArchiveEnabled = true,
                     NoCache = false,
-                    Type = "Docker",
+                    Type = "DockerBuildRequest",
+                    Platform = new PlatformPropertiesArgs
+                    {
+                        Architecture = "amd64",
+                        Os = "Linux"
+                    }
+                }
+            });
+            
+            const string assemblerBuildTaskRunName = "assembler-build-task-run";
+            var assemblerBuildTaskRun = new TaskRun(assemblerBuildTaskRunName, new TaskRunArgs
+            {
+                TaskRunName = assemblerBuildTaskRunName,
+                RegistryName = containerRegistry.Name,
+                ResourceGroupName = resourceGroup.Name,
+                ForceUpdateTag = AssemblerImageTag,
+                RunRequest = new DockerBuildRequestArgs
+                {
+                    SourceLocation = BuildContextBlobUrl,
+                    DockerFilePath = "Dockerfile.assembler",
+                    ImageNames = 
+                    {
+                        AssemblerImageTag
+                    },
+                    IsPushEnabled = true,
+                    IsArchiveEnabled = true,
+                    NoCache = false,
+                    Type = "DockerBuildRequest",
+                    Platform = new PlatformPropertiesArgs
+                    {
+                        Architecture = "amd64",
+                        Os = "Linux"
+                    }
+                }
+            });
+            
+            const string shipperBuildTaskRunName = "shipper-build-task-run";
+            var shipperBuildTaskRun = new TaskRun(shipperBuildTaskRunName, new TaskRunArgs
+            {
+                TaskRunName = shipperBuildTaskRunName,
+                RegistryName = containerRegistry.Name,
+                ResourceGroupName = resourceGroup.Name,
+                ForceUpdateTag = ShipperImageTag,
+                RunRequest = new DockerBuildRequestArgs
+                {
+                    SourceLocation = BuildContextBlobUrl,
+                    DockerFilePath = "Dockerfile.shipper",
+                    ImageNames = 
+                    {
+                        ShipperImageTag
+                    },
+                    IsPushEnabled = true,
+                    IsArchiveEnabled = true,
+                    NoCache = false,
+                    Type = "DockerBuildRequest",
                     Platform = new PlatformPropertiesArgs
                     {
                         Architecture = "amd64",
@@ -468,7 +537,7 @@ namespace CrazyBike.Infra
             }, new CustomResourceOptions
             {
                 IgnoreChanges = new List<string> {"tags"},
-                DependsOn = new InputList<Resource>{ assemblerBuildPushCommand }
+                DependsOn = new InputList<Resource>{ assemblerBuildTaskRun }
             });
             
             var shipperName = $"{projectName}-{stackName}-ca-shipper";
@@ -550,7 +619,7 @@ namespace CrazyBike.Infra
             }, new CustomResourceOptions
             {
                 IgnoreChanges = new List<string> {"tags"},
-                DependsOn = new InputList<Resource>{ shipperBuildPushCommand }
+                DependsOn = new InputList<Resource>{ shipperBuildTaskRun }
             });
             
             #endregion

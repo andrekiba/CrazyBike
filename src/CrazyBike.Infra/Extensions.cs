@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -15,7 +16,7 @@ namespace CrazyBike.Infra
         {
             const string unixLineEnding = "\n";
             var allMd5Bytes = new List<byte>();
-            var excludedDirectories = new[] { "bin", "obj", ".idea" };
+            var excludedDirectories = new[] { "bin", "obj", ".idea", nameof(CrazyBike.Infra) };
             var excludedFiles = new[] {".DS_Store", "appsettings.secret.json", "appsettings.development.json", ".override.yml"};
             var files = Directory.GetFiles(context, "*", SearchOption.AllDirectories);
             foreach (var fileName in files)
@@ -84,9 +85,18 @@ namespace CrazyBike.Infra
             return $"/mnt/{drive}{path}";
         }
         
-        public static string DirToTar(this string sourceDirectory, string tgzFilename)
+        public static string TarDirectory(this string sourceDirectory, string destinationArchiveFilePath,
+            List<string> excludedDirectories = default,
+            List<string> excludedFiles = default)
         {
-            Stream outStream = File.Create(tgzFilename);
+            if (string.IsNullOrEmpty(sourceDirectory))
+                throw new ArgumentNullException(nameof(sourceDirectory));
+            if (string.IsNullOrEmpty(destinationArchiveFilePath))
+                throw new ArgumentNullException(nameof(destinationArchiveFilePath));
+            excludedDirectories ??= new List<string>();
+            excludedFiles ??= new List<string>();
+            
+            Stream outStream = File.Create(destinationArchiveFilePath);
             Stream gzoStream = new GZipOutputStream(outStream);
             var tarArchive = TarArchive.CreateOutputTarArchive(gzoStream);
 
@@ -97,30 +107,33 @@ namespace CrazyBike.Infra
             if (tarArchive.RootPath.EndsWith("/"))
                 tarArchive.RootPath = tarArchive.RootPath.Remove(tarArchive.RootPath.Length - 1);
 
-            tarArchive.AddDirectoryFilesToTar(sourceDirectory, true);
+            tarArchive.AddDirectoryToTar(sourceDirectory, true, sourceDirectory, excludedDirectories, excludedFiles);
 
             tarArchive.Close();
            
-            return tgzFilename;
+            return destinationArchiveFilePath;
         }
-        static void AddDirectoryFilesToTar(this TarArchive tarArchive, string sourceDirectory, bool recurse)
+        static void AddDirectoryToTar(this TarArchive tarArchive, string sourceDirectory, bool recurse,
+            string relativeDirectoryContext,
+            IReadOnlyCollection<string> excludedDirectories,
+            IReadOnlyCollection<string> excludedFiles)
         {
             // Optionally, write an entry for the directory itself.
             // Specify false for recursion here if we will add the directory's files individually.
-            var tarEntry = TarEntry.CreateEntryFromFile(sourceDirectory);
-            tarArchive.WriteEntry(tarEntry, false);
-
-            // Write each file to the tar.
-            var excludedDirectories = new[] { "bin", "obj", ".idea" };
-            var excludedFiles = new[] {".DS_Store", "appsettings.secret.json", "appsettings.development.json", ".override.yml"};
+            //var tarEntry = TarEntry.CreateEntryFromFile(sourceDirectory);
+            //tarArchive.WriteEntry(tarEntry, false);
+            
             var files = Directory.GetFiles(sourceDirectory);
             foreach (var file in files)
             {
                 if(excludedFiles.Any(x => file.EndsWith(x, StringComparison.OrdinalIgnoreCase)))
                     continue;
                 
-                tarEntry = TarEntry.CreateEntryFromFile(file);
-                tarArchive.WriteEntry(tarEntry, true);
+                var entryName = file.Split(Path.Join(relativeDirectoryContext, OperatingSystem.IsWindows() ? "\\" : "/"))[1];
+                
+                var tarEntry = TarEntry.CreateEntryFromFile(file);
+                tarEntry.Name = entryName;
+                tarArchive.WriteEntry(tarEntry, false);
             }
 
             if (!recurse) 
@@ -133,10 +146,58 @@ namespace CrazyBike.Infra
                 if(dirs.Intersect(excludedDirectories, StringComparer.OrdinalIgnoreCase).Any())
                     continue;
                
-                AddDirectoryFilesToTar(tarArchive, directory, true);    
+                AddDirectoryToTar(tarArchive, directory, true, relativeDirectoryContext, excludedDirectories, excludedFiles);    
+            }
+        }
+        public static string ZipDirectory(this string sourceDirectory, string destinationArchiveFilePath,
+            List<string> excludedDirectories = default,
+            List<string> excludedFiles = default
+        )
+        {
+            if (string.IsNullOrEmpty(sourceDirectory))
+                throw new ArgumentNullException(nameof(sourceDirectory));
+            if (string.IsNullOrEmpty(destinationArchiveFilePath))
+                throw new ArgumentNullException(nameof(destinationArchiveFilePath));
+            excludedDirectories ??= new List<string>();
+            excludedFiles ??= new List<string>();
+            
+            if(File.Exists(destinationArchiveFilePath))
+                File.Delete(destinationArchiveFilePath);
+            
+            using var zipFileStream = new FileStream(destinationArchiveFilePath, FileMode.Create);
+            using var archive = new ZipArchive(zipFileStream, ZipArchiveMode.Create);
+            
+            archive.AddDirectoryToZip(sourceDirectory, true, sourceDirectory, excludedDirectories, excludedFiles);
+            
+            return destinationArchiveFilePath;
+        }
+        static void AddDirectoryToZip(this ZipArchive archive, string sourceDirectory, bool recurse,
+            string relativeDirectoryContext,
+            IReadOnlyCollection<string> excludedDirectories,
+            IReadOnlyCollection<string> excludedFiles)
+        {
+            var files = Directory.GetFiles(sourceDirectory);
+            foreach (var file in files)
+            {
+                if(excludedFiles.Any(x => file.EndsWith(x, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                var entryName = file.Split(Path.Join(relativeDirectoryContext, OperatingSystem.IsWindows() ? "\\" : "/"))[1];
+                archive.CreateEntryFromFile(file, entryName, CompressionLevel.Fastest);
             }
 
+            if (!recurse) 
+                return;
             
+            var directories = Directory.GetDirectories(sourceDirectory);
+            foreach (var directory in directories)
+            {
+                var dirs = directory.Split('/', '\\');
+                if(dirs.Intersect(excludedDirectories, StringComparer.OrdinalIgnoreCase).Any())
+                    continue;
+               
+                AddDirectoryToZip(archive, directory, true, relativeDirectoryContext, excludedDirectories, excludedFiles);    
+            }
         }
     }
 
