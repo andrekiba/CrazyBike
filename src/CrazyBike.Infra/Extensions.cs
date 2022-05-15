@@ -12,12 +12,14 @@ namespace CrazyBike.Infra
 {
     public static class Extensions
     {
-        public static string GenerateHash(this string context)
+        public static string GenerateHash(this string context, IReadOnlyCollection<string> excludedDirectories, IReadOnlyCollection<string> excludedFiles)
         {
+            excludedDirectories ??= new List<string>();
+            excludedFiles ??= new List<string>();
+            
             const string unixLineEnding = "\n";
             var allMd5Bytes = new List<byte>();
-            var excludedDirectories = new[] { "bin", "obj", ".idea", nameof(CrazyBike.Infra) };
-            var excludedFiles = new[] {".DS_Store", "appsettings.secret.json", "appsettings.development.json", ".override.yml"};
+            
             var files = Directory.GetFiles(context, "*", SearchOption.AllDirectories);
             foreach (var fileName in files)
             {
@@ -86,8 +88,8 @@ namespace CrazyBike.Infra
         }
         
         public static string TarDirectory(this string sourceDirectory, string destinationArchiveFilePath,
-            List<string> excludedDirectories = default,
-            List<string> excludedFiles = default)
+            IReadOnlyCollection<string> excludedDirectories = default,
+            IReadOnlyCollection<string> excludedFiles = default)
         {
             if (string.IsNullOrEmpty(sourceDirectory))
                 throw new ArgumentNullException(nameof(sourceDirectory));
@@ -139,10 +141,7 @@ namespace CrazyBike.Infra
                 var dirs = directory.Split('/', '\\');
                 if(dirs.Intersect(excludedDirectories, StringComparer.OrdinalIgnoreCase).Any())
                     continue;
-                    
-                //var dirEntry = TarEntry.CreateEntryFromFile(sourceDirectory);
-                //tarArchive.WriteEntry(dirEntry, false);
-               
+                
                 AddDirectoryToTar(tarArchive, directory, true, relativeDirectoryContext, excludedDirectories, excludedFiles);    
             }
         }

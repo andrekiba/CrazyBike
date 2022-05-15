@@ -32,10 +32,10 @@ namespace CrazyBike.Infra
         [Output] public Output<string> BuyImageTag { get; set; }
         [Output] public Output<string> AssemblerImageTag { get; set; }
         [Output] public Output<string> ShipperImageTag { get; set; }
+        [Output] public Output<string> BuildContextBlobUrl {get; set;}
         [Output] public Output<string> BuyBuildOutput {get; set;}
         [Output] public Output<string> AssemblerBuildOutput {get; set;}
         [Output] public Output<string> ShipperBuildOutput {get; set;}
-        [Output] public Output<string> BuildContextBlobUrl {get; set;}
 
         #endregion
         
@@ -87,32 +87,7 @@ namespace CrazyBike.Infra
             });
             
             #endregion
-            
-            #region Docker build context
-            
-            var buildContext = Path.GetFullPath(Directory.GetParent(Directory.GetCurrentDirectory()).FullName);
 
-            const string buildContextTarName = "crazybike-build-context.tar.gz";
-            var buildContextTar = buildContext.TarDirectory(Path.Combine(Path.GetTempPath(), buildContextTarName),
-                new List<string> { "bin", "obj", ".idea", nameof(CrazyBike.Infra) },
-                new List<string> {".DS_Store", "appsettings.secret.json", "appsettings.development.json", ".override.yml"});
-
-            var buildContextBlob = new Storage.Blob(buildContextTarName, new Storage.BlobArgs
-            {
-                AccountName = storageAccount.Name,
-                ContainerName = dockerContainer.Name,
-                ResourceGroupName = resourceGroup.Name,
-                Type = Storage.BlobType.Block,
-                Source = new FileAsset(buildContextTar)
-            }, new CustomResourceOptions
-            {
-                //DeleteBeforeReplace = true
-            });
-            
-            BuildContextBlobUrl = SignedBlobReadUrl(buildContextBlob, dockerContainer, storageAccount, resourceGroup);
-            
-            #endregion 
-            
             #region ASB
             
             var asbNamespaceName = $"{projectName}{stackName}ns";
@@ -174,16 +149,53 @@ namespace CrazyBike.Infra
             
             #endregion
             
-            #region ACR commands
+            #region Docker build context and image tags
             
-            const string azAcrBuildAndPush = "az acr build -r $REGISTRY -t $IMAGENAME -f $DOCKERFILE $CONTEXT";
+            var buildContext = Path.GetFullPath(Directory.GetParent(Directory.GetCurrentDirectory()).FullName);
+            
+            var excludedDirectories = new[] { "bin", "obj", ".idea", nameof(Infra) };
+            var excludedFiles = new[] {".DS_Store", "appsettings.secret.json", "appsettings.development.json", ".override.yml"};
+            
+            const string buildContextTarName = "crazybike-build-context.tar.gz";
+            var buildContextTar = buildContext.TarDirectory(Path.Combine(Path.GetTempPath(), buildContextTarName),
+                excludedDirectories, excludedFiles);
+
+            var buildContextBlob = new Storage.Blob(buildContextTarName, new Storage.BlobArgs
+            {
+                AccountName = storageAccount.Name,
+                ContainerName = dockerContainer.Name,
+                ResourceGroupName = resourceGroup.Name,
+                Type = Storage.BlobType.Block,
+                Source = new FileAsset(buildContextTar)
+            }, new CustomResourceOptions
+            {
+                //DeleteBeforeReplace = true
+            });
+            
+            BuildContextBlobUrl = SignedBlobReadUrl(buildContextBlob, dockerContainer, storageAccount, resourceGroup);
             
             var buyContext = Path.Combine(buildContext,"CrazyBike.Buy");
             var buyImageName = $"{projectName}-buy";
-            var buyContextHash = buyContext.GenerateHash();
+            var buyContextHash = buyContext.GenerateHash(excludedDirectories, excludedFiles);
             BuyImageTag = Output.Format($"{containerRegistry.LoginServer}/{buyImageName}:latest-{buyContextHash}");
             
+            var assemblerContext = Path.Combine(buildContext,"CrazyBike.Assembler");
+            var assemblerImageName = $"{projectName}-assembler";
+            var assemblerContextHash = assemblerContext.GenerateHash(excludedDirectories, excludedFiles);
+            AssemblerImageTag = Output.Format($"{containerRegistry.LoginServer}/{assemblerImageName}:latest-{assemblerContextHash}");
+            
+            var shipperContext = Path.Combine(buildContext,"CrazyBike.Shipper");
+            var shipperImageName = $"{projectName}-shipper";
+            var shipperContextHash = shipperContext.GenerateHash(excludedDirectories, excludedFiles);
+            ShipperImageTag = Output.Format($"{containerRegistry.LoginServer}/{shipperImageName}:latest-{shipperContextHash}");
+            
+            #endregion 
+            
+            #region ACR commands
+            
             /*
+            const string azAcrBuildAndPush = "az acr build -r $REGISTRY -t $IMAGENAME -f $DOCKERFILE $CONTEXT";
+            
             var buyBuildPushCommand = new Command("buy-build-and-push",
                 new CommandArgs
                 {
@@ -207,14 +219,7 @@ namespace CrazyBike.Infra
                     DeleteBeforeReplace = true
                 });
             BuyBuildOutput = buyBuildPushCommand.Stdout;
-            */
-            
-            var assemblerContext = Path.Combine(buildContext,"CrazyBike.Assembler");
-            var assemblerImageName = $"{projectName}-assembler";
-            var assemblerContextHash = assemblerContext.GenerateHash();
-            AssemblerImageTag = Output.Format($"{containerRegistry.LoginServer}/{assemblerImageName}:latest-{assemblerContextHash}");
-            
-            /*
+
             var assemblerBuildPushCommand = new Command("assembler-build-and-push",
                 new CommandArgs
                 {
@@ -238,14 +243,7 @@ namespace CrazyBike.Infra
                     DeleteBeforeReplace = true
                 });
             AssemblerBuildOutput = assemblerBuildPushCommand.Stdout;
-            */
-            
-            var shipperContext = Path.Combine(buildContext,"CrazyBike.Shipper");
-            var shipperImageName = $"{projectName}-shipper";
-            var shipperContextHash = shipperContext.GenerateHash();
-            ShipperImageTag = Output.Format($"{containerRegistry.LoginServer}/{shipperImageName}:latest-{shipperContextHash}");
-            
-            /*
+
             var shipperBuildPushCommand = new Command("shipper-build-and-push",
                 new CommandArgs
                 {
@@ -296,8 +294,8 @@ namespace CrazyBike.Infra
                     Type = "DockerBuildRequest",
                     Platform = new PlatformPropertiesArgs
                     {
-                        Architecture = "amd64",
-                        Os = "Linux"
+                        Architecture = Architecture.Amd64,
+                        Os = OS.Linux
                     }
                 }
             });
@@ -323,8 +321,8 @@ namespace CrazyBike.Infra
                     Type = "DockerBuildRequest",
                     Platform = new PlatformPropertiesArgs
                     {
-                        Architecture = "amd64",
-                        Os = "Linux"
+                        Architecture = Architecture.Amd64,
+                        Os = OS.Linux
                     }
                 }
             });
@@ -350,8 +348,8 @@ namespace CrazyBike.Infra
                     Type = "DockerBuildRequest",
                     Platform = new PlatformPropertiesArgs
                     {
-                        Architecture = "amd64",
-                        Os = "Linux"
+                        Architecture = Architecture.Amd64,
+                        Os = OS.Linux
                     }
                 }
             });
@@ -402,12 +400,12 @@ namespace CrazyBike.Infra
                     },
                     Secrets = 
                     {
-                        new App.Inputs.SecretArgs
+                        new SecretArgs
                         {
                             Name = $"{containerRegistryName}-admin-pwd",
                             Value = adminPassword
                         },
-                        new App.Inputs.SecretArgs
+                        new SecretArgs
                         {
                             Name = asbConnectionSecret,
                             Value = ASBPrimaryConnectionString
@@ -418,7 +416,7 @@ namespace CrazyBike.Infra
                 {
                     Containers = 
                     {
-                        new App.Inputs.ContainerArgs
+                        new ContainerArgs
                         {
                             Name = buyImageName,
                             Image = BuyImageTag,
@@ -478,12 +476,12 @@ namespace CrazyBike.Infra
                     },
                     Secrets = 
                     {
-                        new App.Inputs.SecretArgs
+                        new SecretArgs
                         {
                             Name = $"{containerRegistryName}-admin-pwd",
                             Value = adminPassword
                         },
-                        new App.Inputs.SecretArgs
+                        new SecretArgs
                         {
                             Name = asbConnectionSecret,
                             Value = ASBPrimaryConnectionString
@@ -494,7 +492,7 @@ namespace CrazyBike.Infra
                 {
                     Containers = 
                     {
-                        new App.Inputs.ContainerArgs
+                        new ContainerArgs
                         {
                             Name = assemblerImageName,
                             Image = AssemblerImageTag,
@@ -560,12 +558,12 @@ namespace CrazyBike.Infra
                     },
                     Secrets = 
                     {
-                        new App.Inputs.SecretArgs
+                        new SecretArgs
                         {
                             Name = $"{containerRegistryName}-admin-pwd",
                             Value = adminPassword
                         },
-                        new App.Inputs.SecretArgs
+                        new SecretArgs
                         {
                             Name = asbConnectionSecret,
                             Value = ASBPrimaryConnectionString
@@ -576,7 +574,7 @@ namespace CrazyBike.Infra
                 {
                     Containers = 
                     {
-                        new App.Inputs.ContainerArgs
+                        new ContainerArgs
                         {
                             Name = shipperImageName,
                             Image = ShipperImageTag,
