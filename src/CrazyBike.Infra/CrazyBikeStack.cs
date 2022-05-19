@@ -41,7 +41,6 @@ namespace CrazyBike.Infra
         
         public CrazyBikeStack()
         {
-
 #if DEBUG
             /*
             while (!Debugger.IsAttached)
@@ -436,10 +435,28 @@ namespace CrazyBike.Infra
                 ManagedEnvironmentId = kubeEnv.Id,
                 Configuration = new ConfigurationArgs
                 {
+                    ActiveRevisionsMode = App.ActiveRevisionsMode.Single,
                     Ingress = new IngressArgs
                     {
                         External = true,
-                        TargetPort = 80
+                        TargetPort = 80,
+                        /*
+                        Traffic = 
+                        {
+                            new TrafficWeightArgs
+                            {
+                                LatestRevision = false,
+                                RevisionName =  resourceGroup.Name.Apply(rgName => GetLastRevision(rgName, buyName)),
+                                Weight = 50
+                            },
+                            new TrafficWeightArgs
+                            {
+                                Label = "test",
+                                LatestRevision = true,
+                                Weight = 50
+                            }
+                        }
+                        */
                     },
                     Registries =
                     {
@@ -706,6 +723,16 @@ namespace CrazyBike.Infra
             }).Apply(blobSAS => blobSAS.ServiceSasToken);
 
             return Output.Format($"https://{account.Name}.blob.core.windows.net/{container.Name}/{blob.Name}?{serviceSasToken}");
+        }
+
+        static async Task<string> GetLastRevision(string resourceGroupName, string appName)
+        {
+            var result = await App.GetContainerApp.InvokeAsync(new App.GetContainerAppArgs
+            {
+                ResourceGroupName = resourceGroupName,
+                Name = appName
+            });
+            return result.LatestRevisionName;
         }
     }
 }

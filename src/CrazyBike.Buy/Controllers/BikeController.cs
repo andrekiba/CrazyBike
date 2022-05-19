@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -20,20 +18,19 @@ namespace CrazyBike.Buy.Controllers
     public class BikeController : ControllerBase
     {
         const string AssemblerQueueName = "crazybike-assembler";
-        static readonly string[] bikePartNames =
+        static readonly string[] BikePartNames =
         {
             "wheel", "rim", "tire", "brake", "seat", "cassette", "rear-derailleur", "front-derailleur",  
             "chain", "chainring", "crankset", "pedal", "headset", "stem", "handlerbar", "fork", "frame",
             "hub", "bottle-cage", "disk"
         };
-        static readonly string[] bikeModels = 
+        static readonly string[] BikeModels = 
         { 
             "mtb-xc", "mtb-trail", "mtb-enduro", "mtb-downhill", "bdc-aero",
             "bdc-endurance", "gravel", "ciclocross", "trekking", "urban" 
         };
         
         readonly ILogger<BikeController> logger;
-        readonly IConfiguration configuration;
         readonly ServiceBusAdministrationClient adminClient;
         readonly ServiceBusClient client;
 
@@ -41,17 +38,16 @@ namespace CrazyBike.Buy.Controllers
             IAzureClientFactory<ServiceBusAdministrationClient> sbaFactory, IAzureClientFactory<ServiceBusClient> sbFactory)
         {
             this.logger = logger;
-            this.configuration = configuration;
             adminClient = sbaFactory.CreateClient("buyAdmin");
             client = sbFactory.CreateClient("buy");;
         }
-
+        
         [HttpPost("buy")]
         public async Task<IActionResult> Buy()
         {
             await CreateQueueIfNotExists(AssemblerQueueName);
             
-            var bike = ProduceBike();
+            var bike = ProduceRandomBike();
             var assembleBikeMessage = new AssembleBikeMessage(bike.Id, bike.Price, bike.Model, bike.Parts);
             var rawAssembleBikeMessage = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(assembleBikeMessage));
                 
@@ -71,23 +67,57 @@ namespace CrazyBike.Buy.Controllers
 
             return new AcceptedResult();
         }
+
+        /*
+        [HttpPost("buy")]
+        public async Task<IActionResult> Buy([FromBody] BuyBike payload)
+        {
+            await CreateQueueIfNotExists(AssemblerQueueName);
+            
+            var bike = ProduceRandomBike(payload.Model);
+            var assembleBikeMessage = new AssembleBikeMessage(bike.Id, bike.Price, bike.Model, bike.Parts);
+            var rawAssembleBikeMessage = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(assembleBikeMessage));
+                
+            var message = new ServiceBusMessage(rawAssembleBikeMessage)
+            {
+                MessageId = Guid.NewGuid().ToString(),
+                CorrelationId = Guid.NewGuid().ToString(),
+                ApplicationProperties = { {"MessageType", typeof(AssembleBikeMessage).FullName} }
+            };
+            
+            logger.LogInformation($"Sending buying request for bike {bike.Id}");
+            
+            await using var sender = client.CreateSender(AssemblerQueueName);
+            await sender.SendMessageAsync(message).ConfigureAwait(false);
+            
+            logger.LogInformation($"Bike {bike.Id} bought successfully!");
+
+            return new AcceptedResult();
+        }
+
+        public class BuyBike
+        {
+            public string Model { get; set; }
+        }
+        */
         
-        static Bike ProduceBike()
+        #region Methods
+        
+        static Bike ProduceRandomBike(string model = null)
         {
             var bikePartGen = new Faker<BikePart>()
                 .RuleFor(x => x.Id, () => Guid.NewGuid().ToString())
-                .RuleFor(x => x.Name, f => f.PickRandom(bikePartNames))
+                .RuleFor(x => x.Name, f => f.PickRandom(BikePartNames))
                 .RuleFor(x => x.Code, f => f.Commerce.Ean8());
 
             var bikeGen = new Faker<Bike>()
                 .RuleFor(x => x.Id, () => Guid.NewGuid().ToString())
                 .RuleFor(x => x.Price, f => f.Random.Number(200,10000))
-                .RuleFor(x => x.Model, f => f.PickRandom(bikeModels))
-                .RuleFor(u => u.Parts, f => bikePartGen.Generate(f.Random.Number(6,bikePartNames.Length)));
+                .RuleFor(x => x.Model, f => string.IsNullOrEmpty(model) ? f.PickRandom(BikeModels) : model)
+                .RuleFor(u => u.Parts, f => bikePartGen.Generate(f.Random.Number(6,BikePartNames.Length)));
             
             return bikeGen.Generate();
         }
-        
         async Task CreateQueueIfNotExists(string queueName)
         {
             if (!await adminClient.QueueExistsAsync(queueName))
@@ -99,5 +129,7 @@ namespace CrazyBike.Buy.Controllers
                 await adminClient.CreateQueueAsync(queueOptions);    
             }
         }
+        
+        #endregion 
     }
 }
