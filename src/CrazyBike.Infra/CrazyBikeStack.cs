@@ -274,6 +274,56 @@ namespace CrazyBike.Infra
             
             #region ACR tasks
             
+            const string buyBuildTaskName = "buy-build-task";
+            var buyBuildTask = new ACR.Task(buyBuildTaskName, new TaskArgs
+            {
+                TaskName = buyBuildTaskName,
+                RegistryName = containerRegistry.Name,
+                ResourceGroupName = resourceGroup.Name,
+                Status = ACR.TaskStatus.Enabled,
+                IsSystemTask = false,
+                AgentConfiguration = new AgentPropertiesArgs
+                {
+                    Cpu = 2
+                },
+                Identity = new IdentityPropertiesArgs
+                {
+                    Type = ACR.ResourceIdentityType.SystemAssigned
+                },
+                Platform = new PlatformPropertiesArgs
+                {
+                    Architecture = Architecture.Amd64,
+                    Os = OS.Linux
+                },
+                Step = new DockerBuildStepArgs
+                {
+                    ContextPath = BuildContextBlobUrl,
+                    DockerFilePath = "Dockerfile.buy",
+                    ImageNames = 
+                    {
+                        BuyImageTag
+                    },
+                    IsPushEnabled = true,
+                    NoCache = false,
+                    Type = "Docker"
+                }
+            });
+            
+            const string buyBuildTaskRunName = "buy-build-task-run";
+            var buyBuildTaskRun = new TaskRun(buyBuildTaskRunName, new TaskRunArgs
+            {
+                //TaskRunName = buyBuildTaskRunName,
+                RegistryName = containerRegistry.Name,
+                ResourceGroupName = resourceGroup.Name,
+                ForceUpdateTag = BuyImageTag,
+                RunRequest = new TaskRunRequestArgs
+                {
+                    TaskId = buyBuildTask.Id,
+                    Type = "TaskRunRequest"
+                }
+            });
+            
+            /*
             const string buyBuildTaskRunName = "buy-build-task-run";
             var buyBuildTaskRun = new TaskRun(buyBuildTaskRunName, new TaskRunArgs
             {
@@ -300,6 +350,7 @@ namespace CrazyBike.Infra
                     }
                 }
             });
+            */
             
             const string assemblerBuildTaskRunName = "assembler-build-task-run";
             var assemblerBuildTaskRun = new TaskRun(assemblerBuildTaskRunName, new TaskRunArgs
