@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -79,22 +78,6 @@ namespace CrazyBike.Infra
 
             return line;
         }
-        public static string ToWslFullPath(this string fullPath)
-        {
-            var split = fullPath.Split(":");
-            var drive = split[0].ToLower();
-            var path = split[1].Replace("\\", "/");
-            return $"/mnt/{drive}{path}";
-        }
-        
-        public static string CalculateMD5(this string file)
-        {
-            using var md5 = MD5.Create();
-            using var stream = File.OpenRead(file);
-            var hash = md5.ComputeHash(stream);
-            return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-        }
-        
         public static string TarDirectory(this string sourceDirectory, string destinationArchiveFilePath,
             IReadOnlyCollection<string> excludedDirectories = default,
             IReadOnlyCollection<string> excludedFiles = default)
@@ -151,56 +134,6 @@ namespace CrazyBike.Infra
                     continue;
                 
                 AddDirectoryToTar(tarArchive, directory, true, relativeDirectoryContext, excludedDirectories, excludedFiles);    
-            }
-        }
-        public static string ZipDirectory(this string sourceDirectory, string destinationArchiveFilePath,
-            List<string> excludedDirectories = default,
-            List<string> excludedFiles = default
-        )
-        {
-            if (string.IsNullOrEmpty(sourceDirectory))
-                throw new ArgumentNullException(nameof(sourceDirectory));
-            if (string.IsNullOrEmpty(destinationArchiveFilePath))
-                throw new ArgumentNullException(nameof(destinationArchiveFilePath));
-            excludedDirectories ??= new List<string>();
-            excludedFiles ??= new List<string>();
-            
-            if(File.Exists(destinationArchiveFilePath))
-                File.Delete(destinationArchiveFilePath);
-            
-            using var zipFileStream = new FileStream(destinationArchiveFilePath, FileMode.Create);
-            using var archive = new ZipArchive(zipFileStream, ZipArchiveMode.Create);
-            
-            archive.AddDirectoryToZip(sourceDirectory, true, sourceDirectory, excludedDirectories, excludedFiles);
-            
-            return destinationArchiveFilePath;
-        }
-        static void AddDirectoryToZip(this ZipArchive archive, string sourceDirectory, bool recurse,
-            string relativeDirectoryContext,
-            IReadOnlyCollection<string> excludedDirectories,
-            IReadOnlyCollection<string> excludedFiles)
-        {
-            var files = Directory.GetFiles(sourceDirectory);
-            foreach (var file in files)
-            {
-                if(excludedFiles.Any(x => file.EndsWith(x, StringComparison.OrdinalIgnoreCase)))
-                    continue;
-
-                var entryName = file.Split(Path.Join(relativeDirectoryContext, OperatingSystem.IsWindows() ? "\\" : "/"))[1];
-                archive.CreateEntryFromFile(file, entryName, CompressionLevel.Fastest);
-            }
-
-            if (!recurse) 
-                return;
-            
-            var directories = Directory.GetDirectories(sourceDirectory);
-            foreach (var directory in directories)
-            {
-                var dirs = directory.Split('/', '\\');
-                if(dirs.Intersect(excludedDirectories, StringComparer.OrdinalIgnoreCase).Any())
-                    continue;
-               
-                AddDirectoryToZip(archive, directory, true, relativeDirectoryContext, excludedDirectories, excludedFiles);    
             }
         }
     }

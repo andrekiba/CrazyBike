@@ -122,10 +122,7 @@ namespace CrazyBike.Buy.Controllers
         {
             if (!await adminClient.QueueExistsAsync(queueName))
             {
-                var queueOptions = new CreateQueueOptions(queueName)
-                {  
-                    //LockDuration = TimeSpan.FromMinutes(5) 
-                };
+                var queueOptions = new CreateQueueOptions(queueName);
                 await adminClient.CreateQueueAsync(queueOptions);    
             }
         }

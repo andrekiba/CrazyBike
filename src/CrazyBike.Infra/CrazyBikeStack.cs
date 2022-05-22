@@ -1,12 +1,6 @@
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
-using ICSharpCode.SharpZipLib.GZip;
-using ICSharpCode.SharpZipLib.Tar;
 using Pulumi;
 using Pulumi.AzureNative.App.Inputs;
 using Pulumi.AzureNative.ContainerRegistry;
@@ -33,14 +27,21 @@ namespace CrazyBike.Infra
         [Output] public Output<string> AssemblerImageTag { get; set; }
         [Output] public Output<string> ShipperImageTag { get; set; }
         [Output] public Output<string> BuildContextBlobUrl {get; set;}
-        [Output] public Output<string> BuyBuildOutput {get; set;}
-        [Output] public Output<string> AssemblerBuildOutput {get; set;}
-        [Output] public Output<string> ShipperBuildOutput {get; set;}
+        
+        /*
+        [Output] public Output<string> BuyCommandOutput {get; set;}
+        [Output] public Output<string> BuyCommandError {get; set;}
+        [Output] public Output<string> AssemblerCommandOutput {get; set;}
+        [Output] public Output<string> AssemblerCommandError {get; set;}
+        [Output] public Output<string> ShipperCommandOutput {get; set;}
+        [Output] public Output<string> ShipperCommandError {get; set;}
+        */
 
         #endregion
         
         public CrazyBikeStack()
         {
+            
 #if DEBUG
             /*
             while (!Debugger.IsAttached)
@@ -121,7 +122,7 @@ namespace CrazyBike.Infra
                 GetSharedKeys.InvokeAsync(new GetSharedKeysArgs
                 {
                     ResourceGroupName = items.Item1,
-                    WorkspaceName = items.Item2,
+                    WorkspaceName = items.Item2
                 }));
             
             #endregion
@@ -165,8 +166,7 @@ namespace CrazyBike.Infra
                 ContainerName = dockerContainer.Name,
                 ResourceGroupName = resourceGroup.Name,
                 Type = Storage.BlobType.Block,
-                Source = new FileAsset(buildContextTar),
-                //ContentMd5 = buildContextTar.CalculateMD5()
+                Source = new FileAsset(buildContextTar)
             }, new CustomResourceOptions
             {
                 //DeleteBeforeReplace = true
@@ -206,7 +206,7 @@ namespace CrazyBike.Infra
                         { "IMAGENAME", BuyImageTag },
                         { "CONTEXT", buildContext },
                         { "REGISTRY", containerRegistry.Name },
-                        { "DOCKERFILE", Path.Combine(buildContext, "Dockerfile.buy") }
+                        { "DOCKERFILE", Path.Combine(buildContext, "CrazyBike.Buy", "Dockerfile.buy") }
                     },
                     Triggers = new []
                     {
@@ -218,7 +218,8 @@ namespace CrazyBike.Infra
                     Parent = this,
                     DeleteBeforeReplace = true
                 });
-            BuyBuildOutput = buyBuildPushCommand.Stdout;
+            BuyCommandOutput = buyBuildPushCommand.Stdout;
+            BuyCommandError = buyBuildPushCommand.Stderr;
 
             var assemblerBuildPushCommand = new Command("assembler-build-and-push",
                 new CommandArgs
@@ -230,7 +231,7 @@ namespace CrazyBike.Infra
                         { "IMAGENAME", AssemblerImageTag },
                         { "CONTEXT", buildContext },
                         { "REGISTRY", containerRegistry.Name },
-                        { "DOCKERFILE", Path.Combine(buildContext, "Dockerfile.assembler") }
+                        { "DOCKERFILE", Path.Combine(buildContext, "CrazyBike.Assembler", "Dockerfile.assembler") }
                     },
                     Triggers = new []
                     {
@@ -242,7 +243,8 @@ namespace CrazyBike.Infra
                     Parent = this,
                     DeleteBeforeReplace = true
                 });
-            AssemblerBuildOutput = assemblerBuildPushCommand.Stdout;
+            AssemblerCommandOutput = assemblerBuildPushCommand.Stdout;
+            AssemblerCommandError = assemblerBuildPushCommand.Stderr;
 
             var shipperBuildPushCommand = new Command("shipper-build-and-push",
                 new CommandArgs
@@ -254,7 +256,7 @@ namespace CrazyBike.Infra
                         { "IMAGENAME", ShipperImageTag },
                         { "CONTEXT", buildContext },
                         { "REGISTRY", containerRegistry.Name },
-                        { "DOCKERFILE", Path.Combine(buildContext, "Dockerfile.shipper") }
+                        { "DOCKERFILE", Path.Combine(buildContext, "CrazyBike.Shipper", "Dockerfile.shipper") }
                     },
                     Triggers = new []
                     {
@@ -266,7 +268,8 @@ namespace CrazyBike.Infra
                     Parent = this,
                     DeleteBeforeReplace = true
                 });
-            ShipperBuildOutput = shipperBuildPushCommand.Stdout;
+            ShipperCommandOutput = shipperBuildPushCommand.Stdout;
+            ShipperCommandError = shipperBuildPushCommand.Stderr; 
             */
             
             #endregion
@@ -297,7 +300,7 @@ namespace CrazyBike.Infra
                 Step = new DockerBuildStepArgs
                 {
                     ContextPath = BuildContextBlobUrl,
-                    DockerFilePath = "Dockerfile.buy",
+                    DockerFilePath = "./CrazyBike.Buy/Dockerfile.buy",
                     ImageNames = 
                     {
                         BuyImageTag
@@ -311,7 +314,6 @@ namespace CrazyBike.Infra
             const string buyBuildTaskRunName = "buy-build-task-run";
             var buyBuildTaskRun = new TaskRun(buyBuildTaskRunName, new TaskRunArgs
             {
-                //TaskRunName = buyBuildTaskRunName,
                 RegistryName = containerRegistry.Name,
                 ResourceGroupName = resourceGroup.Name,
                 ForceUpdateTag = BuyImageTag,
@@ -322,86 +324,99 @@ namespace CrazyBike.Infra
                 }
             });
             
-            /*
-            const string buyBuildTaskRunName = "buy-build-task-run";
-            var buyBuildTaskRun = new TaskRun(buyBuildTaskRunName, new TaskRunArgs
+            const string assemblerBuildTaskName = "assembler-build-task";
+            var assemblerBuildTask = new ACR.Task(assemblerBuildTaskName, new TaskArgs
             {
-                TaskRunName = buyBuildTaskRunName,
+                TaskName = assemblerBuildTaskName,
                 RegistryName = containerRegistry.Name,
                 ResourceGroupName = resourceGroup.Name,
-                ForceUpdateTag = BuyImageTag,
-                RunRequest = new DockerBuildRequestArgs
+                Status = ACR.TaskStatus.Enabled,
+                IsSystemTask = false,
+                AgentConfiguration = new AgentPropertiesArgs
                 {
-                    SourceLocation = BuildContextBlobUrl,
-                    DockerFilePath = "Dockerfile.buy",
-                    ImageNames = 
-                    {
-                        BuyImageTag
-                    },
-                    IsPushEnabled = true,
-                    IsArchiveEnabled = true,
-                    NoCache = false,
-                    Type = "DockerBuildRequest",
-                    Platform = new PlatformPropertiesArgs
-                    {
-                        Architecture = Architecture.Amd64,
-                        Os = OS.Linux
-                    }
-                }
-            });
-            */
-            
-            const string assemblerBuildTaskRunName = "assembler-build-task-run";
-            var assemblerBuildTaskRun = new TaskRun(assemblerBuildTaskRunName, new TaskRunArgs
-            {
-                TaskRunName = assemblerBuildTaskRunName,
-                RegistryName = containerRegistry.Name,
-                ResourceGroupName = resourceGroup.Name,
-                ForceUpdateTag = AssemblerImageTag,
-                RunRequest = new DockerBuildRequestArgs
+                    Cpu = 2
+                },
+                Identity = new IdentityPropertiesArgs
                 {
-                    SourceLocation = BuildContextBlobUrl,
-                    DockerFilePath = "Dockerfile.assembler",
+                    Type = ACR.ResourceIdentityType.SystemAssigned
+                },
+                Platform = new PlatformPropertiesArgs
+                {
+                    Architecture = Architecture.Amd64,
+                    Os = OS.Linux
+                },
+                Step = new DockerBuildStepArgs
+                {
+                    ContextPath = BuildContextBlobUrl,
+                    DockerFilePath = "./CrazyBike.Assembler/Dockerfile.assembler",
                     ImageNames = 
                     {
                         AssemblerImageTag
                     },
                     IsPushEnabled = true,
-                    IsArchiveEnabled = true,
                     NoCache = false,
-                    Type = "DockerBuildRequest",
-                    Platform = new PlatformPropertiesArgs
+                    Type = "Docker"
+                }
+            });
+            
+            const string assemblerBuildTaskRunName = "assembler-build-task-run";
+            var assemblerBuildTaskRun = new TaskRun(assemblerBuildTaskRunName, new TaskRunArgs
+            {
+                RegistryName = containerRegistry.Name,
+                ResourceGroupName = resourceGroup.Name,
+                ForceUpdateTag = AssemblerImageTag,
+                RunRequest = new TaskRunRequestArgs
+                {
+                    TaskId = assemblerBuildTask.Id,
+                    Type = "TaskRunRequest"
+                }
+            });
+            
+            const string shipperBuildTaskName = "shipper-build-task";
+            var shipperBuildTask = new ACR.Task(shipperBuildTaskName, new TaskArgs
+            {
+                TaskName = shipperBuildTaskName,
+                RegistryName = containerRegistry.Name,
+                ResourceGroupName = resourceGroup.Name,
+                Status = ACR.TaskStatus.Enabled,
+                IsSystemTask = false,
+                AgentConfiguration = new AgentPropertiesArgs
+                {
+                    Cpu = 2
+                },
+                Identity = new IdentityPropertiesArgs
+                {
+                    Type = ACR.ResourceIdentityType.SystemAssigned
+                },
+                Platform = new PlatformPropertiesArgs
+                {
+                    Architecture = Architecture.Amd64,
+                    Os = OS.Linux
+                },
+                Step = new DockerBuildStepArgs
+                {
+                    ContextPath = BuildContextBlobUrl,
+                    DockerFilePath = "./CrazyBike.Shipper/Dockerfile.shipper",
+                    ImageNames = 
                     {
-                        Architecture = Architecture.Amd64,
-                        Os = OS.Linux
-                    }
+                        ShipperImageTag
+                    },
+                    IsPushEnabled = true,
+                    NoCache = false,
+                    Type = "Docker"
                 }
             });
             
             const string shipperBuildTaskRunName = "shipper-build-task-run";
             var shipperBuildTaskRun = new TaskRun(shipperBuildTaskRunName, new TaskRunArgs
             {
-                TaskRunName = shipperBuildTaskRunName,
                 RegistryName = containerRegistry.Name,
                 ResourceGroupName = resourceGroup.Name,
                 ForceUpdateTag = ShipperImageTag,
-                RunRequest = new DockerBuildRequestArgs
+                RunRequest = new TaskRunRequestArgs
                 {
-                    SourceLocation = BuildContextBlobUrl,
-                    DockerFilePath = "Dockerfile.shipper",
-                    ImageNames = 
-                    {
-                        ShipperImageTag
-                    },
-                    IsPushEnabled = true,
-                    IsArchiveEnabled = true,
-                    NoCache = false,
-                    Type = "DockerBuildRequest",
-                    Platform = new PlatformPropertiesArgs
-                    {
-                        Architecture = Architecture.Amd64,
-                        Os = OS.Linux
-                    }
+                    TaskId = shipperBuildTask.Id,
+                    Type = "TaskRunRequest"
                 }
             });
             
@@ -692,7 +707,9 @@ namespace CrazyBike.Infra
             
             #endregion
         }
-
+        
+        #region Methods
+        
         static async Task<string> GetASBPrimaryConectionString(string resourceGroupName, string namespaceName)
         {
             var result = await ASB.ListNamespaceKeys.InvokeAsync(new ASB.ListNamespaceKeysArgs
@@ -734,5 +751,7 @@ namespace CrazyBike.Infra
             });
             return result.LatestRevisionName;
         }
+        
+        #endregion
     }
 }
