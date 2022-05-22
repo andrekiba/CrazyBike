@@ -1,8 +1,3 @@
 config:
-  ados:pat:
-    secure: AAABAK1bNC1+AuvzT0Hf8qaVLu71MRJReV8Mb/ivw3mlLi10rhRc2PVyGkSrlBUtFIje96VYvdvN8x4OuZdIrw/1yXgDGb1p7VqMCJ8/dTXPBtcs
   azure-native:location: westeurope
   azure-native:subscriptionId: 6b4ce01c-5368-4bb0-af54-be67444292c2
-  github:pat:
-    secure: AAABAKCvvqAOk49rHYBh2gOznBakuprCJCiMkZkVWKgwKaCEAX1SEwTCprui5i7nii+fKgP3xczbiqln/yfx6KXk9mi4oHZM
-  github:repoUrl: https://github.com/andrekiba/CrazyBike.git
