@@ -423,7 +423,7 @@ namespace CrazyBike.Infra
             #endregion 
 
             #region Container Apps
-
+            
             const string asbConnectionSecret = "asb-connection";
 
             var kubeEnvName = $"{projectName}-{stackName}-env";
@@ -516,13 +516,13 @@ namespace CrazyBike.Infra
                     },
                     Scale = new ScaleArgs
                     {
-                        MinReplicas = 0,
+                        MinReplicas = 1, 
                         MaxReplicas = 5,
                         Rules = new List<ScaleRuleArgs>
                         {
                             new ScaleRuleArgs
                             {
-                                Name = "buy-http-requests",
+                                Name = "buy-http-requests", 
                                 Http = new HttpScaleRuleArgs
                                 {
                                     Metadata =
