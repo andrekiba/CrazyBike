@@ -42,7 +42,6 @@ namespace CrazyBike.Buy.Controllers
             client = sbFactory.CreateClient("buy");;
         }
         
-        /*
         [HttpPost("buy")]
         public async Task<IActionResult> Buy()
         {
@@ -68,8 +67,8 @@ namespace CrazyBike.Buy.Controllers
 
             return new AcceptedResult();
         }
-        */
-
+        
+        /*
         [HttpPost("buy")]
         public async Task<IActionResult> Buy([FromBody] BuyBike payload)
         {
@@ -95,6 +94,7 @@ namespace CrazyBike.Buy.Controllers
 
             return new AcceptedResult();
         }
+        */
 
         public class BuyBike
         {

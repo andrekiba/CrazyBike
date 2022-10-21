@@ -450,7 +450,9 @@ namespace CrazyBike.Infra
                 ManagedEnvironmentId = kubeEnv.Id,
                 Configuration = new ConfigurationArgs
                 {
+                    //Traffic split needs multiple revision mode
                     ActiveRevisionsMode = App.ActiveRevisionsMode.Single,
+                    //ActiveRevisionsMode = App.ActiveRevisionsMode.Multiple,
                     Ingress = new IngressArgs
                     {
                         External = true,
